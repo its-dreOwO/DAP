@@ -106,3 +106,6 @@ Required queries per project spec:
 | 3 | Visualisation (Plotly/Folium), regression analysis (odds ratios) |
 | 4 | Power BI supplier scorecard |
 | 4–5 | Streamlit web application |
+
+##source code managment##
+run lint / black max-length=88  test before pushing to github 
