@@ -1,1 +1,6 @@
 notes_DAP/
+app/.venv/
+__pycache__/
+*.pyc
+.~lock.*
+*.log

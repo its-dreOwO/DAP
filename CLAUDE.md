@@ -97,6 +97,22 @@ Required queries per project spec:
 - **Power BI dashboard** — supplier scorecard with risk alerts, drill-down by supplier/region/carrier
 - **Streamlit app** in `app/app.py` — input shipment → predict delay probability + SHAP waterfall explanation
 
+## AI Audit Log workflow
+
+Live log is maintained at `report/ai_audit_log.md`. Claude updates this file automatically when a conversation qualifies as a **core prompt** (DECISION / PROBLEM-SOLVING / VERIFICATION) per the framework in `docs/AI_AuditLog_Template_DAP391m.xlsx`.
+
+**Claude's responsibility:**
+- Add new entries with Entry #, Prompt Type, Stage/Component, Problem/Context, Prompt to AI, AI Response (Summary)
+- Suggest what to write in Human Delta and Evidence (in `[brackets]`) but never fill them in
+- Update the coverage tracker table at the top of the file
+- Update the "Last updated" line
+
+**Student's responsibility:**
+- Fill in Human Delta & Reflection (all 4 questions: Critical Thinking, Contextualization, Creative Synthesis, Decision Ownership)
+- Fill in Evidence (screenshots, metrics, comparisons)
+- Copy finalized entries into `docs/AI_AuditLog_Template_DAP391m.xlsx` before submission
+- Log hallucinations in the hallucination table when found (project requires ≥3)
+
 ## Weekly Timeline
 
 | Week | Focus |
