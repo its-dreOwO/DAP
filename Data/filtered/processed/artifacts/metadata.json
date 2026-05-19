@@ -1,0 +1,81 @@
+{
+  "random_state": 42,
+  "test_size": 0.2,
+  "n_train": 563,
+  "n_test": 141,
+  "pos_rate_train": 0.15630550621669628,
+  "pos_rate_test": 0.15602836879432624,
+  "scale_pos_weight": 5.4,
+  "feature_columns_tree": [
+    "value",
+    "freight_cost",
+    "freight_ratio",
+    "customs_clearance_time_days",
+    "month",
+    "quarter",
+    "avg_delay_hours",
+    "avg_fuel_price",
+    "avg_warehouse_util",
+    "avg_damage_claims",
+    "avg_lead_time_days",
+    "avg_satisfaction",
+    "avg_support_tickets",
+    "avg_order_value",
+    "avg_days_to_pay",
+    "is_import",
+    "product_category",
+    "region",
+    "O_Country",
+    "D_Country"
+  ],
+  "feature_columns_scaled": [
+    "value",
+    "freight_cost",
+    "freight_ratio",
+    "customs_clearance_time_days",
+    "month",
+    "quarter",
+    "avg_delay_hours",
+    "avg_fuel_price",
+    "avg_warehouse_util",
+    "avg_damage_claims",
+    "avg_lead_time_days",
+    "avg_satisfaction",
+    "avg_support_tickets",
+    "avg_order_value",
+    "avg_days_to_pay",
+    "is_import",
+    "product_category",
+    "region",
+    "O_Country",
+    "D_Country"
+  ],
+  "numeric_cols": [
+    "value",
+    "freight_cost",
+    "freight_ratio",
+    "customs_clearance_time_days",
+    "month",
+    "quarter",
+    "avg_delay_hours",
+    "avg_fuel_price",
+    "avg_warehouse_util",
+    "avg_damage_claims",
+    "avg_lead_time_days",
+    "avg_satisfaction",
+    "avg_support_tickets",
+    "avg_order_value",
+    "avg_days_to_pay"
+  ],
+  "binary_cols": [
+    "is_import"
+  ],
+  "low_card_cols": [
+    "product_category",
+    "region"
+  ],
+  "high_card_cols": [
+    "O_Country",
+    "D_Country"
+  ]
+}
