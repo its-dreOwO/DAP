@@ -266,12 +266,10 @@ with tab_dist:
             f"{cs.max() - cs.min():.2f}",
             f"{(cs.max() - cs.min()) - (rs.max() - rs.min()):+.2f}",
         )
-        m3.metric("IQR raw", f"{rs.quantile(0.75) - rs.quantile(0.25):.2f}")
-        m4.metric(
-            "IQR clean",
-            f"{cs.quantile(0.75) - cs.quantile(0.25):.2f}",
-            f"{(cs.quantile(0.75) - cs.quantile(0.25)) - (rs.quantile(0.75) - rs.quantile(0.25)):+.2f}",
-        )
+        raw_iqr = rs.quantile(0.75) - rs.quantile(0.25)
+        clean_iqr = cs.quantile(0.75) - cs.quantile(0.25)
+        m3.metric("IQR raw", f"{raw_iqr:.2f}")
+        m4.metric("IQR clean", f"{clean_iqr:.2f}", f"{clean_iqr - raw_iqr:+.2f}")
 
 with tab_z:
     num_cols = sorted(set(numeric_columns(raw_df)) & set(numeric_columns(clean_df)))
