@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 **DAP391m — Project 8: Supplier Lead-Time Risk Prediction for Retail Procurement**
-FPT University HCMC, Summer 2026. Group 8: Hồ Lâm Bảo Đăng, Nguyễn Hoài Khánh, Dương Gia Bảo.
+FPT University HCMC, Summer 2026. Group 8: Nguyễn Hoài Khánh, Hồ Lâm Bảo Đăng, Dương Gia Bảo.
+Supervisor: Mr. Nguyen Hoai Linh.
 
 ## Python Environment
 
@@ -19,54 +20,89 @@ To activate in fish shell:
 source .venv/bin/activate.fish
 ```
 
-To run a notebook:
+Run a pipeline script:
 ```bash
-.venv/bin/jupyter notebook notebooks/<name>.ipynb
+.venv/bin/python3 src-code/01_ingestion_cleaning.py
 ```
 
 Install dependencies:
 ```bash
-.venv/bin/pip install pandas numpy scikit-learn xgboost sqlalchemy matplotlib seaborn plotly folium streamlit shap prophet boto3 ipykernel jupyter openpyxl
+.venv/bin/pip install pandas numpy scikit-learn xgboost sqlalchemy matplotlib seaborn plotly folium streamlit shap openpyxl
 ```
 
 ## Data Architecture
 
-Three source CSVs in `Data/` with no shared primary key — joined by region/date proxies:
+Three source CSVs in `Data/` — `shipment.csv` is the fact table:
 
 | File | Rows | Key columns | Role |
 |---|---|---|---|
-| `customer.csv` | 750 | `supplier_id`, `lead_time_days`, `market_segment`, `satisfaction_score` | Supplier & customer features |
-| `shipment.csv` | 728 | `delivery_status` (target), `customs_clearance_time_days`, `freight_cost` | Base table for modeling |
-| `logistics_performance.csv` | 100 | `carrier`, `region`, `delay_hours_avg`, `warehouse_utilization_percent` | Carrier/region conditions (Jun 2024 only) |
+| `customer.csv` | 750 | `supplier_id`, `lead_time_days`, `market_segment`, `satisfaction_score` | Supplier attributes |
+| `shipment.csv` | 728 | `delivery_status` (target), `customs_clearance_time_days`, `freight_cost`, `supplier_id` | Fact table |
+| `logistics_performance.csv` | 100 | `carrier`, `region`, `delay_hours_avg`, `warehouse_utilization_percent` | Regional carrier performance |
 
 **Join strategy:**
+- `customer` joined to `shipment` on `supplier_id` (direct lookup)
 - `shipment.D_Country` → mapped to region via `country_to_region` dict
-- `logistics_performance` joined on `year_month` + `region` (sparse — falls back to global means)
-- `customer` aggregated by `market_segment` (treated as region proxy) then joined on `region`
+- `logistics_performance` joined on `region`
+- Inner joins only — unmatched rows dropped. Final dataset: **704 rows, 23 features**
 
-**Target:** `delivery_status == "Delayed"` → binary 1/0. Class imbalance: ~84% On-Time, 16% Delayed — use `class_weight='balanced'` or SMOTE.
+**Target:** `delivery_status == "Delayed"` → binary 1/0.
+Class imbalance: ~16% Delayed, 84% On-Time — handled via `class_weight='balanced'` and threshold tuning at evaluation.
 
 ## Filtered Data
 
-`Data/filtered/extract_model_data.py` — merges all 3 CSVs and outputs `Data/filtered/model_features.csv` (704 rows, 23 columns, zero nulls). Run from `Data/filtered/`:
+`Data/filtered/extract_model_data.py` — merges all 3 CSVs and outputs `Data/filtered/model_features.csv`.
 ```bash
-cd Data/filtered && ../../.venv/bin/python3 extract_model_data.py
+.venv/bin/python3 Data/filtered/extract_model_data.py
 ```
 
-## Notebook Pipeline Order
+## Pipeline Order (`src-code/`)
 
-Notebooks must be run in sequence — each builds on the previous:
-1. `01_ingestion_cleaning.ipynb` — load, type-fix, null handling
-2. `02_sql_analysis.ipynb` — SQLite queries, supplier/carrier aggregations
-3. `03_eda.ipynb` — distributions, correlations, time series
-4. `04_feature_engineering.ipynb` — encoding, scaling, engineered features
-5. `05_modeling.ipynb` — 5 models (LogReg, DTree, RF, XGBoost, MLP), SHAP
-6. `06_visualization_advanced.ipynb` — Plotly/Folium dashboards
+Scripts must be run in sequence:
+1. `01_ingestion_cleaning.py` — load raw CSVs, type-fix, null handling, output clean CSVs
+2. `02_sql_analysis.py` — SQLite in-memory queries: avg lead time, delay frequency, volume-delay correlation, YoY growth, penetration index
+3. `03_eda.py` — distributions, correlation heatmap, class balance, time-series plots
+4. `04_feature_engineering.py` — label encoding, standard scaling, train/test split (stratified)
+5. `05_modeling.py` — 4 models: LogReg, DecisionTree, RandomForest, XGBoost; evaluate PR-AUC + recall (primary), ROC-AUC + F1 + confusion matrix (secondary); stratified 5-fold CV; SHAP on XGBoost
+6. `06_visualization_advanced.py` — Plotly/Folium risk heatmap, boxplots by supplier, lead-time histograms, trend lines
+
+## Models
+
+**4 classifiers benchmarked** (no MLP):
+- Logistic Regression (baseline + odds-ratio interpretation)
+- Decision Tree
+- Random Forest
+- XGBoost ← primary model, used in Streamlit app
+
+**Primary evaluation metrics:** PR-AUC and recall on the Delayed class (imbalance-aware).
+**Secondary:** ROC-AUC, F1-score, confusion matrix.
+**Validation:** Stratified 5-fold cross-validation.
+
+## SQL (`sql/analysis.sql`)
+
+Required queries per project spec:
+- Average lead time per supplier
+- Delay frequency per supplier
+- Volume–delay correlation
+- Monthly delay trends over time
+- Year-over-year growth rate
+- Penetration index
 
 ## Deliverables (course requirements)
 
-- **≥5 models** compared on Accuracy, F1, AUC-ROC vs a baseline paper
-- **SQL** queries in `sql/analysis.sql` covering time series and aggregations
-- **AI Audit Log** (`docs/AI_AuditLog_Template_DAP391m.xlsx`) — 15–20 prompts + ≥3 hallucination checks, mandatory for every graded submission
-- **Final report** in `report/main.tex` — LaTeX Springer 1-column, 10–12 pages
-- **Streamlit app** in `app/app.py` — input shipment → predict delay probability using trained XGBoost + SHAP explanation
+- **4 models** compared on PR-AUC, Recall, ROC-AUC, F1 — primary metric is PR-AUC
+- **SQL** queries in `sql/analysis.sql`
+- **AI Audit Log** (`docs/AI_AuditLog_Template_DAP391m.xlsx`) — 15–20 prompts + ≥3 hallucination checks
+- **Final report** in `report/main.tex` — LaTeX, 10–12 pages
+- **Power BI dashboard** — supplier scorecard with risk alerts, drill-down by supplier/region/carrier
+- **Streamlit app** in `app/app.py` — input shipment → predict delay probability + SHAP waterfall explanation
+
+## Weekly Timeline
+
+| Week | Focus |
+|---|---|
+| 1 | Business understanding, research questions, data collection & cleaning |
+| 2 | SQL analysis, Python modeling (4 models + SHAP) |
+| 3 | Visualisation (Plotly/Folium), regression analysis (odds ratios) |
+| 4 | Power BI supplier scorecard |
+| 4–5 | Streamlit web application |

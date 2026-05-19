@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: pip install black flake8
+
+      - name: Black formatting check
+        run: black --check app/ src-code/
+
+      - name: Flake8 lint
+        run: flake8 app/ src-code/ --max-line-length=88 --extend-ignore=E203,W503

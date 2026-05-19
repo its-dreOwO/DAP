@@ -1,0 +1,166 @@
+\documentclass[runningheads]{llncs}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\begin{document}
+
+\title{Supplier Lead-Time Risk Prediction for Retail Procurement}
+
+\author{Nguyen Hoai Khanh\inst{1} \and
+Ho Lam Bao Dang\inst{1} \and
+Duong Gia Bao\inst{1}}
+
+\authorrunning{Khanh et al.}
+
+\institute{FPT University HCMC, Ho Chi Minh City, Vietnam\\
+\email{\{K@itsdre.me, baodang10506@gmail.com, ilyrabao@gmail.com\}}}
+
+\maketitle
+
+\begin{abstract}
+Supplier lead-time variability poses significant stockout and procurement risks in
+retail operations. This study builds a predictive classification framework using
+supply chain logistics data, benchmarking four classifiers (Logistic Regression,
+Decision Tree, Random Forest, XGBoost) with SHAP explainability to identify
+high-risk suppliers. Primary evaluation uses PR-AUC and recall on the delayed
+class to account for class imbalance (16\% delayed). XGBoost achieves the highest
+PR-AUC under stratified 5-fold cross-validation. A Streamlit web application
+enables procurement teams to score individual shipments in real time.
+
+\keywords{Supplier Risk Prediction \and Delay Classification \and Supply Chain Analytics \and XGBoost \and SHAP}
+\end{abstract}
+
+
+\section{Introduction}
+
+Supplier lead-time delays cause stockouts, margin erosion, and poor customer
+satisfaction in retail procurement. Early identification of high-risk shipments
+allows procurement teams to pre-emptively switch carriers or expedite orders.
+
+This project addresses three research questions:
+\begin{enumerate}
+  \item Which suppliers and routes carry the highest delay risk?
+  \item Which machine learning model best predicts shipment delays?
+  \item How can predictions be explained and acted on by non-technical users?
+\end{enumerate}
+
+
+\section{Dataset}
+
+The analysis uses three publicly available CSV files from Kaggle, merged into a
+single modelling dataset of \textbf{704 rows and 23 features}.
+
+\begin{table}[h]
+\caption{Data sources}\label{tab:data}
+\begin{tabular}{lrl}
+\toprule
+File & Rows & Contents \\
+\midrule
+\texttt{customer.csv}              & 750 & Supplier attributes, lead-time days, market segment \\
+\texttt{shipment.csv}              & 728 & Delivery status (target), customs time, freight cost \\
+\texttt{logistics\_performance.csv} & 100 & Carrier delay averages, warehouse utilisation by region \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{shipment.csv} serves as the fact table. \texttt{customer.csv} is joined
+on \texttt{supplier\_id}; \texttt{logistics\_performance.csv} is joined on
+\texttt{region} (derived from destination country). Inner joins reduce the
+combined source rows to the final 704-row modelling set.
+
+The target is whether a shipment was \textbf{Delayed} (16\%) or \textbf{On-Time}
+(84\%). Class imbalance is addressed through \texttt{class\_weight='balanced'} in
+model training and threshold tuning during evaluation.
+
+
+\section{Methods}
+
+\subsection{Feature Engineering}
+
+Categorical columns (carrier, market segment, region) are label-encoded.
+Numeric features are standardised with \texttt{StandardScaler}. The dataset is
+split 80/20 with stratification on the target.
+
+\subsection{Models}
+
+Four classifiers are benchmarked:
+\begin{itemize}
+  \item Logistic Regression — baseline; coefficients interpreted as odds ratios
+  \item Decision Tree
+  \item Random Forest
+  \item XGBoost — primary model deployed in the Streamlit application
+\end{itemize}
+
+\subsection{Evaluation}
+
+\textbf{Primary:} PR-AUC and recall on the Delayed class (imbalance-aware).\\
+\textbf{Secondary:} ROC-AUC, F1-score, confusion matrix.\\
+\textbf{Validation:} Stratified 5-fold cross-validation.
+
+\subsection{Explainability}
+
+SHAP TreeExplainer is applied to the XGBoost model to produce global feature
+importance rankings and per-shipment waterfall plots surfaced in the web
+application.
+
+
+\section{SQL Analysis}
+
+SQLite queries compute supplier-level risk patterns:
+\begin{itemize}
+  \item Average lead time and delay frequency per supplier
+  \item Volume--delay correlation
+  \item Monthly delay trends and year-over-year growth rate
+  \item Carrier penetration index (delay share vs volume share)
+\end{itemize}
+
+
+\section{Results}
+
+% TODO: fill in after running 05_modeling.py
+\begin{table}[h]
+\caption{Model comparison}\label{tab:results}
+\begin{tabular}{lcccc}
+\toprule
+Model & PR-AUC & Recall (Delayed) & ROC-AUC & F1 \\
+\midrule
+Logistic Regression & -- & -- & -- & -- \\
+Decision Tree       & -- & -- & -- & -- \\
+Random Forest       & -- & -- & -- & -- \\
+XGBoost             & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Visualisation}
+
+Plotly and Folium are used to produce:
+\begin{itemize}
+  \item Risk heatmap surfacing highest-risk supplier--route pairs
+  \item Boxplots of lead-time spread per supplier
+  \item Lead-time histograms and monthly trend lines
+\end{itemize}
+
+A Power BI supplier scorecard provides drill-down by supplier, region, and
+carrier with automated risk alerts to support procurement decisions.
+
+
+\section{Web Application}
+
+The Streamlit application (\texttt{app/app.py}) accepts shipment input parameters
+and returns a real-time delay probability from the trained XGBoost model alongside
+a SHAP waterfall chart explaining the individual prediction.
+
+
+\section{Conclusion}
+
+% TODO: fill in after experiments complete
+
+\bibliographystyle{splncs04}
+\bibliography{references}
+
+\end{document}
