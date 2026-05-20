@@ -7,21 +7,24 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  black:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install lint tools
-        run: pip install black flake8
-
+      - run: pip install black
       - name: Black formatting check
-        run: black --check app/ src-code/
+        run: black --check --line-length=88 app/ src-code/
 
+  flake8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install flake8
       - name: Flake8 lint
-        run: flake8 app/ src-code/ --max-line-length=88 --extend-ignore=E203,W503
+        run: flake8 app/ src-code/ --max-line-length=88 --extend-ignore=E203,W503 --exclude=app/.venv,app/venv,.venv
