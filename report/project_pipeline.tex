@@ -1,0 +1,595 @@
+\documentclass[11pt,a4paper]{article}
+
+% Core packages
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue]{hyperref}
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{amsmath, amssymb}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{parskip}
+
+% Widow/orphan control
+\widowpenalty=10000
+\clubpenalty=10000
+
+% Global list compaction
+\setlist[itemize]{nosep, leftmargin=*, topsep=2pt, partopsep=0pt}
+\setlist[enumerate]{nosep, leftmargin=*, topsep=2pt, partopsep=0pt}
+
+% Section heading style
+\titleformat{\section}{\large\bfseries\color{blue!70!black}}{}{0em}{\thesection\quad}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{\thesubsection\quad}
+
+% Header / footer
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small DAP391m --- Group 8}
+\rhead{\small Updated Project Pipeline}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% tcolorbox styles
+\tcbset{
+  warningbox/.style={
+    colback=red!5, colframe=red!65!black,
+    fonttitle=\bfseries, title={Critical Warning},
+    left=6pt, right=6pt, top=4pt, bottom=4pt
+  },
+  infobox/.style={
+    colback=blue!5, colframe=blue!60!black,
+    fonttitle=\bfseries,
+    left=6pt, right=6pt, top=4pt, bottom=4pt
+  },
+  adoptbox/.style={
+    colback=green!5, colframe=green!55!black,
+    fonttitle=\bfseries,
+    left=6pt, right=6pt, top=4pt, bottom=4pt
+  },
+  decisionbox/.style={
+    colback=orange!5, colframe=orange!70!black,
+    fonttitle=\bfseries,
+    left=6pt, right=6pt, top=4pt, bottom=4pt
+  }
+}
+
+% Column type for wide tables
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{document}
+
+% ──────────────────────────────────────────
+%  TITLE PAGE
+% ──────────────────────────────────────────
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\LARGE\bfseries Updated Project Pipeline\par}
+\vspace{0.5em}
+{\large\color{blue!70!black} Supplier Lead-Time Risk Prediction --- DAP391m, Summer 2026\par}
+\vspace{0.3em}
+{\normalsize Group 8\par}
+\vspace{2cm}
+
+\begin{tabular}{ccc}
+  Nguyen Hoai Khanh & Ho Lam Bao Dang & Duong Gia Bao \\
+  \small K@itsdre.me & \small baodang10506@gmail.com & \small ilyrabao@gmail.com
+\end{tabular}
+
+\vspace{0.8cm}
+{\small FPT University HCMC \\ Supervisor: Mr.\ Nguyen Hoai Linh\par}
+\vspace{1.5cm}
+
+\begin{tcolorbox}[infobox, title={Document Purpose}]
+This document records every pipeline decision made after receiving supervisor feedback
+(``data not good enough'') and reviewing the reference paper by Orajaka \& Okolie (2025).
+It specifies exactly what to adopt, what to keep, what to drop, and how each pipeline
+script must change. No code is modified by this document; it is the specification that
+guides code changes.
+\end{tcolorbox}
+
+\vfill
+{\small Version 1.0 --- 2026-05-20\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ──────────────────────────────────────────
+\section{Executive Summary}
+% ──────────────────────────────────────────
+
+The supervisor's assessment that the original data was ``ok but not good enough'' was
+confirmed by quantitative analysis: the original joined dataset produced only 704 rows
+from 7 unique suppliers, providing insufficient coverage for reliable generalization.
+The team sourced a replacement dataset (\texttt{supply\_chain\_risk\_dataset.csv})
+containing 2,478 rows across 51 suppliers, which directly resolves the scale concern.
+
+In parallel, the reference paper---\textit{Using Artificial Intelligence to predict and
+optimize supplier lead times in procurement operations} (Orajaka \& Okolie, 2025)---was
+reviewed in full. While the paper adopts a regression framing that ultimately fails
+($R^2 = -0.09$), it contributes three high-value techniques: expanding-window supplier
+history features, temporal order features, and a rigorous theoretical framework spanning
+five management theories.
+
+The central update is therefore two-fold: migrate to the new dataset and integrate the
+paper's best feature-engineering practices. The project's classification framing,
+four-model benchmark, PR-AUC primary metric, and stratified cross-validation are all
+retained---they are demonstrably stronger than the paper's approach and better suited
+to the procurement risk-alerting use case.
+
+% ──────────────────────────────────────────
+\section{Dataset Transition}
+% ──────────────────────────────────────────
+
+\subsection{Quantitative Comparison}
+
+Table~\ref{tab:dataset-compare} presents a side-by-side comparison of the original
+three-CSV dataset and the new single-CSV dataset across the dimensions most relevant
+to model reliability.
+
+\begin{table}[htbp]
+\centering
+\caption{Original vs.\ new dataset --- key metrics}
+\label{tab:dataset-compare}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\textwidth}{L{4.2cm} X X}
+\toprule
+\textbf{Dimension} & \textbf{Original (3 CSVs)} & \textbf{New Dataset} \\
+\midrule
+\rowcolor{gray!8}
+Rows after join & 704 & 2,478 \\
+Unique suppliers & 7 & 51 \\
+\rowcolor{gray!8}
+Missing values & Present & Zero \\
+Target variable & \texttt{delivery\_status} (binary) & \texttt{risk\_label} (3-class) \\
+\rowcolor{gray!8}
+Class distribution & 16\% Delayed / 84\% On-Time & 63\% High / 19\% Low / 18\% Medium \\
+Supplier features & \texttt{lead\_time\_days}, \texttt{satisfaction\_score} & \texttt{supplier\_lead\_time\_days}, \texttt{supplier\_quality\_score}, \texttt{supplier\_reliability\_index} \\
+\rowcolor{gray!8}
+Environmental features & None & Port delay, weather disruption, fuel price, market demand \\
+Machine/IoT features & None & Temperature, vibration, runtime \\
+\rowcolor{gray!8}
+Temporal coverage & Multiple years & Mar--Jul 2025 (5 months) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Target Variable Decision}
+
+The new dataset provides two target columns: \texttt{risk\_probability} (continuous
+0--1) and \texttt{risk\_label} (categorical: High/Medium/Low). A correlation analysis
+revealed that \texttt{risk\_probability} correlates at $r = 0.898$ with
+\texttt{port\_delay\_days}, confirming the label is synthetically derived rather than
+observed from real delivery outcomes. The detailed implications are addressed in
+Section~\ref{sec:leakage}.
+
+For modelling, the project will use \texttt{risk\_label} as the primary target in its
+three-class form (High, Medium, Low). A binary collapse (High vs.\ not-High) will be
+computed as a secondary comparison target to maintain continuity with the original
+proposal's binary framing.
+
+% ──────────────────────────────────────────
+\section{Data Quality Warning: Leakage Risk}
+\label{sec:leakage}
+% ──────────────────────────────────────────
+
+\begin{tcolorbox}[warningbox]
+\textbf{Finding:} \texttt{port\_delay\_days} correlates with \texttt{risk\_probability}
+at $r = 0.898$. All other features correlate at $r \leq 0.102$. The target label is
+therefore an algebraic function of \texttt{port\_delay\_days}, not an independent
+business outcome.
+\end{tcolorbox}
+
+This finding has two direct pipeline consequences. First, \texttt{port\_delay\_days}
+must be excluded from the model feature set entirely. A model trained with it as a
+feature would learn a trivial mapping and achieve near-perfect accuracy on a proxy
+signal rather than a real procurement risk. Second, \texttt{risk\_probability} must
+also be excluded for the same reason---it \textit{is} the target transformed.
+
+The remaining 12 operational and environmental features (temperature, vibration,
+runtime, inventory level, pending orders, supplier lead time, supplier quality score,
+supplier reliability index, fuel price index, market demand index, and weather
+disruption score) represent genuine supply chain signals. After adding the engineered
+features described in Section~\ref{sec:feature-eng}, the final feature matrix will
+contain approximately 17--20 columns.
+
+The synthetic nature of the target must be disclosed in the project report's data
+section. A suggested sentence: \textit{``The \texttt{risk\_label} target variable is
+derived primarily from port delay conditions ($r = 0.898$), making it a proxy risk
+score rather than a directly observed delivery outcome. To prevent target leakage,
+\texttt{port\_delay\_days} is excluded from the feature set.''}
+
+% ──────────────────────────────────────────
+\section{Updated Feature Engineering Plan}
+\label{sec:feature-eng}
+% ──────────────────────────────────────────
+
+\subsection{Features Adopted from the Paper}
+
+\textbf{Expanding-Window Supplier History.} The paper's second and third most important
+SHAP features are \texttt{supplier\_avg\_lead} and \texttt{supplier\_std\_lead},
+computed using an expanding window per supplier. These capture a supplier's historical
+reliability: the mean quantifies average performance, while the standard deviation
+captures consistency. Both will be engineered from \texttt{supplier\_lead\_time\_days}
+in the new dataset. A critical implementation detail is the \texttt{.shift(1)} offset,
+which ensures the current row's lead-time value does not contribute to its own
+prediction feature, thereby preventing look-ahead leakage.
+
+\begin{tcolorbox}[adoptbox, title={Expanding Window --- Implementation Spec}]
+\begin{verbatim}
+df = df.sort_values('timestamp')
+df['supplier_avg_lead'] = df.groupby('supplier_id')['supplier_lead_time_days'] \
+    .transform(lambda x: x.expanding().mean().shift(1))
+df['supplier_std_lead'] = df.groupby('supplier_id')['supplier_lead_time_days'] \
+    .transform(lambda x: x.expanding().std().shift(1))
+\end{verbatim}
+With $\approx$48.6 observations per supplier on average, the expanding windows will
+have sufficient history to stabilise by the 10th observation per supplier.
+\end{tcolorbox}
+
+\textbf{Temporal Features.} The paper extracts \texttt{order\_month} and
+\texttt{order\_weekday} from the order date to capture seasonal and scheduling patterns.
+The new dataset's \texttt{timestamp} column enables equivalent extraction plus an
+\texttt{order\_hour} feature that reflects shift-level operational patterns---a
+dimension the paper did not exploit.
+
+\subsection{Original Project Features to Engineer}
+
+\textbf{Supplier Risk Score.} Combining multiple supplier signals into a single
+composite score makes the signal denser and provides an interpretable KPI for the
+Power BI dashboard. The composite weights supplier lead-time history (40\%), lead-time
+consistency (30\%), quality score (20\%), and reliability index (10\%). These weights
+are heuristic starting points; SHAP analysis after modelling will validate whether
+the composite or its constituent parts better explain predictions.
+
+\begin{tcolorbox}[infobox, title={Supplier Risk Score --- Implementation Spec}]
+\begin{verbatim}
+df['supplier_risk_score'] = (
+    df['supplier_avg_lead'] * 0.40 +
+    df['supplier_std_lead'] * 0.30 +
+    (100 - df['supplier_quality_score']) / 100 * 0.20 +
+    (1 - df['supplier_reliability_index']) * 0.10
+)
+\end{verbatim}
+Rows where \texttt{supplier\_avg\_lead} is NaN (first observation per supplier) should
+have \texttt{supplier\_risk\_score} set to NaN and subsequently imputed with the
+supplier-level median.
+\end{tcolorbox}
+
+\textbf{External Risk Composite.} The paper explicitly identifies environmental factors
+as a gap in the literature. The new dataset fills this gap with weather disruption,
+fuel price, and market demand. These will be combined into a single external disruption
+index (after \texttt{port\_delay\_days} is excluded). This composite provides an
+interpretable environmental-pressure signal for the Streamlit app.
+
+\subsection{Encoding Changes}
+
+The original pipeline used \texttt{LabelEncoder} for \texttt{supplier\_id}. This will
+be replaced with One-Hot Encoding for \texttt{supplier\_id} (51 unique values = 50
+binary columns, manageable). \texttt{machine\_id} has 201 unique values; OHE would
+produce 200 noisy indicator columns. Instead, \texttt{machine\_id} will be dropped
+entirely---machine-level identity is not a procurement variable and the supplier
+features already capture the relevant supplier-level variation.
+
+\subsection{Feature Inventory: Final Matrix}
+
+Table~\ref{tab:features} summarises the full feature set after engineering and encoding.
+
+\begin{table}[htbp]
+\centering
+\caption{Final feature matrix --- new dataset after engineering}
+\label{tab:features}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{L{4.5cm} L{2.5cm} X}
+\toprule
+\textbf{Feature} & \textbf{Source} & \textbf{Notes} \\
+\midrule
+\rowcolor{gray!8}
+\texttt{temperature\_C} & Raw & Machine operational signal \\
+\texttt{vibration\_level} & Raw & Machine operational signal \\
+\rowcolor{gray!8}
+\texttt{machine\_runtime\_hours} & Raw & Machine utilisation \\
+\texttt{inventory\_level\_units} & Raw & Inventory pressure \\
+\rowcolor{gray!8}
+\texttt{pending\_orders} & Raw & Demand pressure \\
+\texttt{supplier\_lead\_time\_days} & Raw & Core supplier metric \\
+\rowcolor{gray!8}
+\texttt{supplier\_quality\_score} & Raw & Proxy for defect rate \\
+\texttt{supplier\_reliability\_index} & Raw & Delivery consistency \\
+\rowcolor{gray!8}
+\texttt{fuel\_price\_index} & Raw & External cost pressure \\
+\texttt{weather\_disruption\_score} & Raw & Environmental disruption \\
+\rowcolor{gray!8}
+\texttt{market\_demand\_index} & Raw & Demand-side pressure \\
+\texttt{order\_month} & Engineered & Seasonal pattern \\
+\rowcolor{gray!8}
+\texttt{order\_weekday} & Engineered & Scheduling pattern \\
+\texttt{order\_hour} & Engineered & Shift-level pattern \\
+\rowcolor{gray!8}
+\texttt{supplier\_avg\_lead} & Engineered & Historical mean (paper) \\
+\texttt{supplier\_std\_lead} & Engineered & Historical variability (paper) \\
+\rowcolor{gray!8}
+\texttt{supplier\_risk\_score} & Engineered & Composite (new) \\
+\texttt{external\_risk\_score} & Engineered & Environmental composite \\
+\rowcolor{gray!8}
+\texttt{supplier\_id\_*} (OHE) & Encoded & 50 binary columns \\
+\midrule
+\texttt{port\_delay\_days} & \textcolor{red!70!black}{\textbf{DROPPED}} & Near-target leakage ($r = 0.898$) \\
+\texttt{risk\_probability} & \textcolor{red!70!black}{\textbf{DROPPED}} & Direct target leakage \\
+\texttt{machine\_id} & \textcolor{red!70!black}{\textbf{DROPPED}} & 201 categories, no procurement signal \\
+\texttt{timestamp} & \textcolor{red!70!black}{\textbf{DROPPED}} & Replaced by temporal features \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ──────────────────────────────────────────
+\section{Pipeline Script Specifications}
+% ──────────────────────────────────────────
+
+Each of the six pipeline scripts requires updates for the new dataset. This section
+specifies exactly what changes in each file. No code is modified here; these are
+specifications for the developer to implement.
+
+\subsection{Script 01 --- Ingestion and Cleaning}
+
+The script must be updated to load \texttt{Data/supply\_chain\_risk\_dataset.csv}
+instead of the three original CSVs. The three-way join logic (customer $\rightarrow$
+shipment $\rightarrow$ logistics) is replaced by single-file ingestion. Type coercion
+should parse \texttt{timestamp} as \texttt{datetime64}, and \texttt{risk\_label} as a
+categorical with ordered levels (Low $<$ Medium $<$ High). The null check will pass
+trivially since the new dataset has zero missing values, but the check should remain
+as a pipeline guard. Output: \texttt{Data/filtered/clean\_data.csv}.
+
+\subsection{Script 02 --- SQL Analysis}
+
+The SQL queries must be rewritten for the new schema. The six required queries map to
+the new columns as follows: average lead time per supplier uses
+\texttt{supplier\_lead\_time\_days} grouped by \texttt{supplier\_id}; delay frequency
+uses \texttt{risk\_label = 'High'} as the delay proxy; volume--delay correlation
+compares \texttt{pending\_orders} against \texttt{risk\_label}; monthly trends group by
+\texttt{strftime('\%Y-\%m', timestamp)}; year-over-year growth uses the same timestamp
+grouping at annual resolution; and the penetration index computes the fraction of
+High-risk events per supplier relative to the dataset mean.
+
+\subsection{Script 03 --- EDA}
+
+The EDA script should add three new analyses: a correlation heatmap confirming the
+\texttt{port\_delay\_days} leakage signal (to document it explicitly), a class
+balance chart for the three-class target, and a per-supplier box plot of
+\texttt{supplier\_lead\_time\_days} to visualise the 51-supplier spread (analogous to
+Figure~2 in the reference paper).
+
+\subsection{Script 04 --- Feature Engineering}
+
+This is the most substantially changed script. The changes are:
+\begin{enumerate}
+  \item Parse timestamp and extract \texttt{order\_month}, \texttt{order\_weekday}, \texttt{order\_hour}.
+  \item Drop \texttt{port\_delay\_days}, \texttt{risk\_probability}, \texttt{machine\_id}, \texttt{timestamp}.
+  \item Sort by \texttt{timestamp} and compute expanding-window supplier features with shift.
+  \item Compute \texttt{supplier\_risk\_score} and \texttt{external\_risk\_score}.
+  \item Apply IQR capping to continuous features (retain existing IQR logic).
+  \item Replace \texttt{LabelEncoder} with \texttt{pd.get\_dummies} for \texttt{supplier\_id}.
+  \item Encode \texttt{risk\_label} as ordered integer (Low=0, Medium=1, High=2) for multi-class models.
+  \item Stratified train/test split (80/20) preserving class proportions.
+\end{enumerate}
+
+\subsection{Script 05 --- Modelling}
+
+The four classifiers (Logistic Regression, Decision Tree, Random Forest, XGBoost) are
+retained without change to their architecture. The target changes from binary to
+three-class, which requires two configuration updates: \texttt{multi\_class='ovr'} for
+Logistic Regression and \texttt{objective='multi:softprob'} with
+\texttt{num\_class=3} for XGBoost. The stratified five-fold cross-validation
+configuration is unchanged. Primary evaluation metrics shift from binary PR-AUC to
+macro-averaged PR-AUC across the three classes, with per-class recall reported
+separately. A binary secondary analysis (High vs.\ not-High) should be run alongside
+the three-class models to maintain comparability with the original proposal.
+
+\subsection{Script 06 --- Advanced Visualisation}
+
+The Folium risk heatmap should be adapted to use \texttt{supplier\_id} as the grouping
+key. Since the new dataset lacks geographic coordinates, a simulated spatial layout
+(supplier IDs mapped to a grid) or a bubble chart by risk level provides an equivalent
+visual. The existing Plotly boxplots by supplier and lead-time histograms translate
+directly to the new schema.
+
+% ──────────────────────────────────────────
+\section{Model Evaluation Framework}
+% ──────────────────────────────────────────
+
+\subsection{Primary Metrics}
+
+Macro-averaged PR-AUC is the primary metric for the three-class setting, ensuring that
+performance on the minority classes (Medium and Low) is not obscured by the dominant
+High class. Per-class recall is reported separately so that the High-risk recall---the
+most operationally critical figure---can be evaluated in isolation. This mirrors the
+original proposal's emphasis on recall for the delayed class.
+
+\subsection{Secondary Metrics}
+
+ROC-AUC (macro OvR), weighted F1-score, and the three-class confusion matrix serve as
+secondary metrics. For the binary secondary analysis, the full set of original secondary
+metrics (binary PR-AUC, binary ROC-AUC, F1, confusion matrix) is preserved.
+
+\subsection{Validation}
+
+Stratified five-fold cross-validation is retained. With 2,478 rows, each fold contains
+approximately 496 samples, which provides stable variance estimates across all three
+classes. The final test set (held-out 20\%) is used only for final reporting; all
+hyperparameter decisions are made on the cross-validation folds.
+
+\begin{tcolorbox}[decisionbox, title={Why Not Switch to Regression?}]
+The reference paper frames the task as regression (predicting exact lead-time days)
+and achieves $R^2 = -0.09$, meaning the model performs worse than a simple mean
+predictor. Procurement teams need an actionable risk flag (High / Medium / Low), not a
+day-count estimate. The classification framing is retained for both practical and
+performance reasons.
+\end{tcolorbox}
+
+% ──────────────────────────────────────────
+\section{Theoretical Framework for the Report}
+% ──────────────────────────────────────────
+
+The reference paper grounds its work in five management theories. All five directly
+justify the AI-driven classification approach used in this project and should be cited
+in the final report's literature review section. Table~\ref{tab:theories} maps each
+theory to its specific justification for this project.
+
+\begin{table}[htbp]
+\centering
+\caption{Theoretical framework adopted from Orajaka \& Okolie (2025)}
+\label{tab:theories}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{L{4cm} X}
+\toprule
+\textbf{Theory} & \textbf{Justification for this Project} \\
+\midrule
+\rowcolor{gray!8}
+Transaction Cost Economics (Williamson, 1979) &
+  Lead-time delays are hidden transaction costs. ML quantifies this cost and enables
+  procurement teams to price supplier risk into sourcing decisions. \\
+Resource-Based View (Barney, 1991) &
+  Supplier reliability is a strategic, firm-specific resource. Predictive modelling
+  identifies which suppliers constitute a competitive advantage and which are a
+  liability. \\
+\rowcolor{gray!8}
+Lean Supply Chain Theory (Womack \& Jones, 1996) &
+  Delay prediction enables proactive waste elimination. By anticipating late deliveries,
+  procurement can adjust safety-stock policies and avoid production stoppages. \\
+Complex Adaptive Systems (Choi et al., 2001) &
+  Supply chains are non-linear, emergent networks. Tree-based ensemble models (RF,
+  XGBoost) are better suited to this non-linearity than linear regression. \\
+\rowcolor{gray!8}
+Decision Theory + Risk Management (Raiffa, 1968) &
+  Probabilistic risk scores from the classifier support rational procurement
+  decisions under uncertainty, enabling cost--risk trade-off analysis. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ──────────────────────────────────────────
+\section{Full Adoption Decision Table}
+% ──────────────────────────────────────────
+
+Table~\ref{tab:adoption} is the master decision record for this pipeline update,
+covering every element evaluated across the original dataset, the new dataset, and
+the reference paper.
+
+\begin{longtable}{L{5.2cm} L{2.2cm} L{5.8cm}}
+\caption{Master adoption table --- pipeline update decisions}
+\label{tab:adoption} \\
+\toprule
+\textbf{Element} & \textbf{Action} & \textbf{Rationale} \\
+\midrule
+\endfirsthead
+\multicolumn{3}{l}{\small\textit{Table~\ref{tab:adoption} continued}} \\
+\toprule
+\textbf{Element} & \textbf{Action} & \textbf{Rationale} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r}{\small\textit{Continued on next page}} \\
+\endfoot
+\bottomrule
+\endlastfoot
+\rowcolor{green!8}
+\texttt{supplier\_avg\_lead} via expanding window & \textbf{ADOPT} & Paper's 2nd SHAP feature; captures supplier history \\
+\texttt{supplier\_std\_lead} via expanding window & \textbf{ADOPT} & Paper's 3rd SHAP feature; captures delivery consistency \\
+\rowcolor{green!8}
+One-Hot Encoding for \texttt{supplier\_id} & \textbf{ADOPT} & Avoids false ordinal relationships in tree models \\
+\texttt{order\_month}, \texttt{order\_weekday}, \texttt{order\_hour} & \textbf{ADOPT} & Temporal features from paper; new dataset enables \texttt{order\_hour} \\
+\rowcolor{green!8}
+Five theoretical frameworks in literature review & \textbf{ADOPT} & Directly justifies ML approach; paper provides full citations \\
+IQR outlier capping on continuous features & \textbf{RETAIN (extend)} & Already in pipeline; extend to new dataset columns \\
+\rowcolor{blue!5}
+Classification framing (not regression) & \textbf{KEEP} & Paper's regression failed ($R^2 = -0.09$); classification is more actionable \\
+Four-model benchmarking & \textbf{KEEP} & More rigorous than paper's single-model approach \\
+\rowcolor{blue!5}
+PR-AUC + Recall as primary metrics & \textbf{KEEP} & Correct for imbalanced multi-class; paper uses inappropriate MAE/RMSE \\
+Stratified 5-fold cross-validation & \textbf{KEEP} & Paper has no CV; provides variance estimates \\
+\rowcolor{blue!5}
+Per-prediction SHAP waterfall in Streamlit & \textbf{KEEP} & Paper shows aggregate SHAP only; per-prediction is the differentiator \\
+Power BI supplier scorecard & \textbf{KEEP} & Course requirement; not present in paper \\
+\rowcolor{blue!5}
+SQL 6-query analysis & \textbf{KEEP} & Course requirement; queries rewritten for new schema \\
+3-class target (High/Medium/Low) & \textbf{ADD} & More nuanced than binary; aligns with Power BI risk tiers \\
+\rowcolor{yellow!15}
+\texttt{supplier\_risk\_score} composite & \textbf{ADD} & Paper-inspired; provides interpretable KPI for dashboard \\
+\texttt{external\_risk\_score} composite & \textbf{ADD} & Addresses paper's stated future-work gap \\
+\rowcolor{yellow!15}
+Binary secondary analysis (High vs.\ not-High) & \textbf{ADD} & Maintains comparability with original proposal \\
+Data leakage disclosure in report & \textbf{ADD} & $r = 0.898$ finding must be documented \\
+\rowcolor{red!8}
+\texttt{port\_delay\_days} as model feature & \textbf{DROP} & Near-target leakage ($r = 0.898$) \\
+\texttt{risk\_probability} as model feature & \textbf{DROP} & Direct target leakage \\
+\rowcolor{red!8}
+\texttt{machine\_id} OHE & \textbf{DROP} & 201 categories; no procurement signal \\
+Regression task (MAE / RMSE / $R^2$) & \textbf{REJECT} & Paper demonstrated failure; wrong framing \\
+\rowcolor{red!8}
+Original 3-CSV join pipeline & \textbf{RETIRE} & Replaced by new dataset; 7 suppliers insufficient \\
+\end{longtable}
+
+% ──────────────────────────────────────────
+\section{Deliverables Status}
+% ──────────────────────────────────────────
+
+\subsection{Course Requirements}
+
+All course deliverables are unaffected by the dataset change. The four-model
+comparison, SQL analysis file (\texttt{sql/analysis.sql}), AI Audit Log
+(\texttt{docs/AI\_AuditLog\_Template\_DAP391m.xlsx}), and final LaTeX report
+(\texttt{report/main.tex}) remain as specified. The modelling target changes from
+binary to three-class, which updates the classifier configurations and evaluation
+tables but does not change the deliverable categories.
+
+\subsection{Applied Deliverables}
+
+The Power BI supplier scorecard gains a natural upgrade path: the three-class risk
+label (High/Medium/Low) maps directly to traffic-light risk alerts without requiring
+threshold tuning. The Streamlit application's SHAP waterfall explanation is unchanged;
+the input fields will be updated to match the new feature set.
+
+\subsection{Report Literature Review}
+
+A minimum of three citations from Orajaka \& Okolie (2025) should be incorporated into
+the final report: the feature importance finding that supplier reliability dominates
+lead-time prediction, the gap identification for environmental factors (now addressed
+by the new dataset), and the recommendation for ensemble over linear models. These
+citations strengthen the report's positioning relative to prior work.
+
+% ──────────────────────────────────────────
+\section{Implementation Order}
+% ──────────────────────────────────────────
+
+The pipeline updates should be implemented in the following sequence to minimise
+integration risk. Scripts 01 and 04 carry the highest change surface; scripts 05 and
+06 require only configuration updates once the feature matrix is validated.
+
+\begin{enumerate}
+  \item \textbf{Script 01} --- Update ingestion for new CSV; validate shape (2,478 $\times$ 17) and zero nulls.
+  \item \textbf{Script 03} --- Run EDA on raw new data; confirm leakage correlation visually.
+  \item \textbf{Script 04} --- Implement all feature engineering changes; validate final matrix shape.
+  \item \textbf{Script 02} --- Rewrite SQL queries for new schema; validate output tables.
+  \item \textbf{Script 05} --- Update classifier configs for three-class; run CV; report metrics.
+  \item \textbf{Script 06} --- Update visualisations for new schema; generate report figures.
+  \item \textbf{Streamlit app} --- Update input fields and SHAP waterfall for new feature set.
+  \item \textbf{Power BI} --- Rebuild scorecard with three-class risk tiers.
+\end{enumerate}
+
+Running the pipeline in this order ensures that each downstream script receives a
+validated input before it is updated, making integration errors traceable to a single
+script at a time.
+
+\end{document}
