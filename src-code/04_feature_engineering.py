@@ -26,11 +26,9 @@ import json
 import pickle
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     OrdinalEncoder,
     StandardScaler,
@@ -68,9 +66,9 @@ NUMERIC_COLS = [
     "avg_days_to_pay",
 ]
 
-BINARY_COLS = ["is_import"]                            # already 0/1
-LOW_CARD_COLS = ["product_category", "region"]         # ordinal encode
-HIGH_CARD_COLS = ["O_Country", "D_Country"]            # target encode (fit on train only)
+BINARY_COLS = ["is_import"]  # already 0/1
+LOW_CARD_COLS = ["product_category", "region"]  # ordinal encode
+HIGH_CARD_COLS = ["O_Country", "D_Country"]  # target encode (fit on train only)
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
