@@ -1,0 +1,20 @@
+# Core data
+pandas
+numpy
+scikit-learn
+xgboost
+sqlalchemy
+
+# Visualisation
+matplotlib
+seaborn
+plotly
+folium
+
+# App & explainability
+streamlit
+shap
+openpyxl
+
+# Dev
+black
