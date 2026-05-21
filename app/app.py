@@ -165,9 +165,7 @@ def build_input_row(
     return pd.DataFrame([row], columns=feature_columns)
 
 
-def predict_delay(
-    model: Any, features: pd.DataFrame
-) -> tuple[int, str, float | None]:
+def predict_delay(model: Any, features: pd.DataFrame) -> tuple[int, str, float | None]:
     pred = int(model.predict(features)[0])
     label = "Delayed" if pred == 1 else "On-Time"
     prob: float | None = None
@@ -294,8 +292,7 @@ for idx, (filename, caption) in enumerate(ARTIFACT_IMAGES[:2]):
 
 # ── limitations ────────────────────────────────────────────────────────────────
 st.header("Limitations")
-st.markdown(
-    """
+st.markdown("""
 - Predictions use **median defaults** for features not edited in the sidebar; \
 tune key supplier and lane fields for scenario analysis.
 - The model is trained on historical shipment data; **new suppliers or routes** \
@@ -306,5 +303,4 @@ not contractual SLAs.
 training medians unless the pipeline exposes UI controls.
 - For production use, validate with procurement stakeholders and monitor \
 drift against `model_comparison.csv` metrics.
-"""
-)
+""")

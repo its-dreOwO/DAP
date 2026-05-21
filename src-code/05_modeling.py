@@ -159,7 +159,9 @@ def load_and_prepare_data() -> tuple[pd.DataFrame, pd.Series]:
 def split_features(
     X: pd.DataFrame,
 ) -> tuple[list[str], list[str]]:
-    cat_cols = X.select_dtypes(include=["object", "category", "string"]).columns.tolist()
+    cat_cols = X.select_dtypes(
+        include=["object", "category", "string"]
+    ).columns.tolist()
     num_cols = [c for c in X.columns if c not in cat_cols]
     return num_cols, cat_cols
 
@@ -468,7 +470,6 @@ def run_shap_summary(
     try:
         model = pipeline.named_steps["model"]
         preprocessor = pipeline.named_steps["preprocess"]
-        X_transformed = preprocessor.transform(X_test)
         feature_names = get_feature_names(pipeline)
 
         sample = X_test
@@ -539,9 +540,7 @@ def main() -> None:
 
         if spec.get("optional") and spec["key"] == "xgboost":
             if not HAS_XGBOOST:
-                warnings.warn(
-                    "XGBoost not installed — skipping XGBoost.", stacklevel=2
-                )
+                warnings.warn("XGBoost not installed — skipping XGBoost.", stacklevel=2)
                 continue
             try:
                 pipeline = make_model_pipeline(
@@ -560,11 +559,13 @@ def main() -> None:
             pipeline.fit(X_train, y_train_arr)
 
         y_pred = pipeline.predict(X_test)
-        y_proba = pipeline.predict_proba(X_test) if hasattr(pipeline, "predict_proba") else None
-
-        metrics = evaluate_multiclass(
-            y_test_arr, y_pred, y_proba, display
+        y_proba = (
+            pipeline.predict_proba(X_test)
+            if hasattr(pipeline, "predict_proba")
+            else None
         )
+
+        metrics = evaluate_multiclass(y_test_arr, y_pred, y_proba, display)
 
         save_model_pickle(pipeline, OUTPUT_DIR / spec["pkl"])
         save_confusion_matrix(metrics["confusion_matrix"], OUTPUT_DIR / spec["cm"])
