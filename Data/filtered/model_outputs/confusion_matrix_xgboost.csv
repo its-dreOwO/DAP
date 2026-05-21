@@ -1,3 +1,4 @@
-,Pred_0,Pred_1
-Actual_0,110,9
-Actual_1,12,10
+,Pred_Low,Pred_Medium,Pred_High
+Actual_Low,6,2,88
+Actual_Medium,5,2,80
+Actual_High,12,7,294
