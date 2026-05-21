@@ -169,7 +169,12 @@ Live log is maintained at `report/ai\_audit\_log.md`. Claude updates this file a
 | 4–5 | Streamlit web application |
 
 
-\#\#source code managment\#\#
+## Project Tracking
 
-important don’t forget: run lint / black max-length=88  test before pushing to github
+- **`TODO.md`** — task checklist by week and deliverable (✅ Done / 🔄 In Progress / ⬜ Not Started)
+- **`PROBLEMS.md`** — open decisions requiring group consensus; resolve before proceeding
+
+## Source Code Management
+
+Important: run lint / black max-length=88 test before pushing to GitHub.
 

@@ -31,3 +31,14 @@ Run the pipeline in order:
 .venv/bin/streamlit run app/app.py
 ```
 
+## Project Status
+
+See [`TODO.md`](TODO.md) for the full task checklist (what's done, in progress, and not started).
+
+See [`PROBLEMS.md`](PROBLEMS.md) for open decisions that need group discussion before work can proceed.
+
+**Current blockers:**
+- `01_ingestion_cleaning.py` is incomplete — `clean_data.csv` not yet produced
+- Scripts `02`, `03`, `05`, `06` are empty — pipeline cannot run end-to-end
+- Work division across scripts not yet assigned (see `PROBLEMS.md` P4)
+
