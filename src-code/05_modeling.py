@@ -117,13 +117,11 @@ MODEL_SPECS: list[dict[str, Any]] = [
 # ── data loading & feature prep ─────────────────────────────────────────────
 def load_and_prepare_data() -> tuple[pd.DataFrame, pd.Series]:
     if not DATA_CSV.exists():
-        print(f"ERROR: Dataset not found: {DATA_CSV}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Dataset not found: {DATA_CSV}")
 
     df = pd.read_csv(DATA_CSV)
     if TARGET_COL not in df.columns:
-        print(f"ERROR: Target column '{TARGET_COL}' not found in {DATA_CSV.name}")
-        sys.exit(1)
+        raise ValueError(f"Target column '{TARGET_COL}' not found in {DATA_CSV.name}")
 
     print(f"Dataset shape: {df.shape}")
     print("Class distribution (risk_label):")
@@ -148,8 +146,7 @@ def load_and_prepare_data() -> tuple[pd.DataFrame, pd.Series]:
     y_raw = df[TARGET_COL].astype(str).str.strip()
     unknown = set(y_raw.unique()) - set(CLASS_LABELS)
     if unknown:
-        print(f"ERROR: Unexpected risk_label values: {unknown}")
-        sys.exit(1)
+        raise ValueError(f"Unexpected risk_label values: {unknown}")
 
     y = y_raw.map(LABEL_TO_INT)
     X = df.drop(columns=[TARGET_COL])
@@ -515,9 +512,8 @@ def save_xgboost_predictions(
 
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
-    clear_output_dir(OUTPUT_DIR)
-
     X, y = load_and_prepare_data()
+    clear_output_dir(OUTPUT_DIR)
     num_cols, cat_cols = split_features(X)
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -672,4 +668,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        sys.exit(1)
