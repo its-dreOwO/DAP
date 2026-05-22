@@ -22,8 +22,8 @@
 | Execute queries & save results in Python | `src-code/02_sql_analysis.py` | ⬜ empty |
 | EDA: distributions, heatmap, class balance | `src-code/03_eda.py` | ⬜ empty |
 | Feature engineering (temporal, expanding window, OHE) | `src-code/04_feature_engineering.py` | ✅ |
-| Train 4 models + SHAP on XGBoost | `src-code/05_modeling.py` | ⬜ empty |
-| Evaluate: PR-AUC, Recall, ROC-AUC, F1, CV | `src-code/05_modeling.py` | ⬜ empty |
+| Train 4 models + SHAP on XGBoost | `src-code/05_modeling.py` | ✅ |
+| Evaluate: PR-AUC, Recall, ROC-AUC, F1 | `src-code/05_modeling.py` | ✅ |
 
 ---
 
@@ -32,7 +32,7 @@
 | Task | File | Status |
 |------|------|--------|
 | Plotly/Folium risk heatmap, boxplots, trend lines | `src-code/06_visualization_advanced.py` | ⬜ empty |
-| Odds-ratio analysis (Logistic Regression interpretation) | `src-code/05_modeling.py` | ⬜ |
+| Odds-ratio analysis (Logistic Regression interpretation) | `src-code/05_modeling.py` | ⬜ not yet |
 
 ---
 
@@ -50,8 +50,8 @@
 
 | Task | File | Status |
 |------|------|--------|
-| Input form → predict risk + SHAP waterfall | `app/app.py` | 🔄 stub (67 lines) |
-| Load saved XGBoost model (`.pkl` / `.json`) | `app/app.py` | ⬜ model not trained yet |
+| 3-class input form → predict Low/Medium/High + probabilities | `app/app.py` | ✅ (453 lines) |
+| Load saved XGBoost model (`primary_model.pkl`) | `app/app.py` | ✅ |
 | Deploy / run locally end-to-end | — | ⬜ |
 
 ---
@@ -87,8 +87,8 @@
 
 - [ ] All 6 pipeline scripts run clean end-to-end
 - [ ] `sql/analysis.sql` matches output from `02_sql_analysis.py`
-- [ ] 4 model comparison table with PR-AUC as primary metric
-- [ ] SHAP waterfall plot saved
+- [x] 4 model comparison table with PR-AUC as primary metric (`Data/filtered/model_outputs/model_comparison.csv`)
+- [x] SHAP summary plot saved (`Data/filtered/model_outputs/shap_summary.png`)
 - [ ] Power BI `.pbix` file committed
 - [ ] Streamlit app runs: `streamlit run app/app.py`
 - [ ] Report PDF compiled from `main.tex` (10–12 pages)

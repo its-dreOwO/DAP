@@ -80,7 +80,7 @@ Scripts must be run in sequence:
 
 4. `04\_feature\_engineering.py` — drop leakage cols, extract temporal features, expanding window supplier features, composite scores, OHE for supplier\_id, IQR capping, 80/20 stratified split
 
-5. `05\_modeling.py` — 4 models (3-class + binary secondary): LogReg (`multi\_class='ovr'`), DecisionTree, RandomForest, XGBoost (`objective='multi:softprob'`, `num\_class=3`); macro PR-AUC + per-class recall (primary); ROC-AUC, F1, confusion matrix (secondary); stratified 5-fold CV; SHAP on XGBoost
+5. `05\_modeling.py` — **standalone script**, reads `Data/supply\_chain\_risk\_dataset.csv` directly (drops leakage cols + machine\_id, extracts temporal features). Trains 4 classifiers (3-class `risk\_label`): LogReg (`multi\_class='ovr'`), DecisionTree, RandomForest, XGBoost (`objective='multi:softprob'`, `num\_class=3`). Primary metric: Macro PR-AUC. Outputs all artifacts to `Data/filtered/model\_outputs/`: `primary\_model.pkl` (XGBoost deployment), `best\_model.pkl` (highest PR-AUC, may differ from XGBoost), `xgb\_model.pkl`, per-model classification reports, confusion matrices, SHAP summary, feature importance, model comparison CSV/PNG. Does **not** require `04\_feature\_engineering.py` to run first.
 
 6. `06\_visualization\_advanced.py` — Plotly/Folium risk heatmap by supplier, boxplots, lead-time histograms, trend lines
 
@@ -98,7 +98,20 @@ Scripts must be run in sequence:
 
 - XGBoost (`objective='multi:softprob'`, `num\_class=3`) ← primary model, used in Streamlit app
 
-**Primary evaluation metrics:** Macro PR-AUC and per-class recall (imbalance-aware). **Secondary:** Macro ROC-AUC, weighted F1-score, confusion matrix; binary analysis (High vs. not-High). **Validation:** Stratified 5-fold cross-validation.
+**Primary evaluation metrics:** Macro PR-AUC (imbalance-aware). **Secondary:** Macro ROC-AUC OvR, weighted F1, per-class precision/recall, confusion matrix. **Validation:** Stratified 80/20 train-test split (`random_state=42`). No cross-validation in the current pipeline.
+
+**Model artifacts** (`Data/filtered/model_outputs/`):
+
+| File | Contents |
+| - | - |
+| `primary\_model.pkl` | XGBoost pipeline — official deployment + Streamlit model |
+| `xgb\_model.pkl` | XGBoost pipeline (explainability / SHAP) |
+| `best\_model.pkl` | Highest Macro PR-AUC pipeline (may be Logistic Regression) |
+| `predictions\_test.csv` | XGBoost test-set predictions + per-class probabilities |
+| `model\_comparison.csv` / `.png` | All 4 models side-by-side on every metric |
+| `shap\_summary.png` | SHAP beeswarm on XGBoost (top 20 features) |
+| `feature\_importance.png` | XGBoost feature importances |
+| `confusion\_matrix\_xgboost.png` | XGBoost confusion matrix heatmap |
 
 ## Reference Paper
 
@@ -132,7 +145,7 @@ Required queries per project spec:
 
 - **Power BI dashboard** — supplier scorecard with risk alerts, drill-down by supplier/region/carrier
 
-- **Streamlit app** in `app/app.py` — input shipment → predict delay probability + SHAP waterfall explanation
+- **Streamlit app** in `app/app.py` — 3-class risk prediction (Low/Medium/High) with P(Low)/P(Medium)/P(High) breakdown, procurement notes, SHAP summary, and model comparison display
 
 ## AI Audit Log workflow
 
