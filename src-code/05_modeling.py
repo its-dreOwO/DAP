@@ -13,12 +13,15 @@ Run:
 from __future__ import annotations
 
 import inspect
+import os
 import pickle
 import shutil
 import sys
 import warnings
 from pathlib import Path
 from typing import Any
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import matplotlib.pyplot as plt
 import numpy as np

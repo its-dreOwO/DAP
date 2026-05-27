@@ -74,15 +74,25 @@ Scripts must be run in sequence:
 
 1. `01\_ingestion\_cleaning.py` — load `supply\_chain\_risk\_dataset.csv`, parse timestamp, type-fix, null guard, output `Data/filtered/clean\_data.csv`
 
-2. `02\_sql\_analysis.py` — SQLite in-memory queries on new schema: avg lead time by supplier, High-risk frequency, volume-delay correlation, monthly trends, YoY growth, penetration index
+2. `02\_sql\_analysis.py` — SQLite in-memory queries on `Data/customer.csv`, `Data/shipment.csv`, and `Data/logistics_performance.csv`: average lead time by supplier, delay frequency, volume-delay summary, monthly trends, YoY growth, penetration index. The source shipment file does not contain `supplier_id` or `carrier`, so the script derives deterministic analysis fields from the customer and logistics files before running `sql/analysis.sql`.
 
 3. `03\_eda.py` — distributions, leakage correlation heatmap, 3-class balance chart, per-supplier boxplots
 
-4. `04\_feature\_engineering.py` — drop leakage cols, extract temporal features, expanding window supplier features, composite scores, OHE for supplier\_id, IQR capping, 80/20 stratified split
+4. `04\_feature\_engineering.py` — drop leakage cols, extract temporal features, expanding-window supplier features, composite scores, OHE for supplier\_id, IQR capping, 80/20 stratified split, and write dual processed matrices under `Data/filtered/processed/`
 
 5. `05\_modeling.py` — **standalone script**, reads `Data/supply\_chain\_risk\_dataset.csv` directly (drops leakage cols + machine\_id, extracts temporal features). Trains 4 classifiers (3-class `risk\_label`): LogReg (`multi\_class='ovr'`), DecisionTree, RandomForest, XGBoost (`objective='multi:softprob'`, `num\_class=3`). Primary metric: Macro PR-AUC. Outputs all artifacts to `Data/filtered/model\_outputs/`: `primary\_model.pkl` (XGBoost deployment), `best\_model.pkl` (highest PR-AUC, may differ from XGBoost), `xgb\_model.pkl`, per-model classification reports, confusion matrices, SHAP summary, feature importance, model comparison CSV/PNG. Does **not** require `04\_feature\_engineering.py` to run first.
 
-6. `06\_visualization\_advanced.py` — Plotly/Folium risk heatmap by supplier, boxplots, lead-time histograms, trend lines
+6. `06\_visualization\_advanced.py` — Plotly supplier risk ranking, monthly risk trend, lead-time distribution, model comparison export, and supplier scorecard under `Data/filtered/visualization_outputs/`
+
+Generated outputs from the current runnable pipeline:
+
+- `Data/filtered/clean_data.csv`
+- `Data/filtered/sql_outputs/*.csv`
+- `Data/filtered/eda_outputs/*`
+- `Data/filtered/engineered_features.csv`
+- `Data/filtered/processed/*`
+- `Data/filtered/model_outputs/*`
+- `Data/filtered/visualization_outputs/*`
 
 **Reference spec:** `report/project\_pipeline.pdf` — full pipeline decision record.
 
@@ -133,6 +143,9 @@ Required queries per project spec:
 
 - Penetration index
 
+`02_sql_analysis.py` executes these queries directly from `sql/analysis.sql`
+and saves one CSV per query under `Data/filtered/sql_outputs/`.
+
 ## Deliverables (course requirements)
 
 - **4 models** compared on PR-AUC, Recall, ROC-AUC, F1 — primary metric is PR-AUC
@@ -177,7 +190,7 @@ Live log is maintained at `report/ai\_audit\_log.md`. Claude updates this file a
 | - | - |
 | 1 | Business understanding, research questions, data collection & cleaning |
 | 2 | SQL analysis, Python modeling (4 models + SHAP) |
-| 3 | Visualisation (Plotly/Folium), regression analysis (odds ratios) |
+| 3 | Visualisation (Plotly exports), optional regression/odds-ratio interpretation |
 | 4 | Power BI supplier scorecard |
 | 4–5 | Streamlit web application |
 
@@ -190,4 +203,3 @@ Live log is maintained at `report/ai\_audit\_log.md`. Claude updates this file a
 ## Source Code Management
 
 Important: run lint / black max-length=88 test before pushing to GitHub.
-

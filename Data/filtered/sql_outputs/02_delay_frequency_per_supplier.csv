@@ -1,0 +1,8 @@
+supplier_id,total_shipments,delayed_count,delay_rate_pct
+SUP-E,104,19,18.3
+SUP-A,105,19,18.1
+SUP-G,103,16,15.5
+SUP-C,103,15,14.6
+SUP-F,104,14,13.5
+SUP-B,105,14,13.3
+SUP-D,104,13,12.5
