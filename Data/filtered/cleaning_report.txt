@@ -1,16 +1,22 @@
 DAP391m ingestion and cleaning report
 ========================================
-Input: Data/supply_chain_risk_dataset.csv
+Input: Data/credit_risk_dataset.csv
 Output: Data/filtered/clean_data.csv
-Rows: 2478
-Columns: 17
+Input rows: 32581
+Impossible-value rows removed: 7
+Duplicate rows removed: 165
+Output rows: 32409
+Columns: 12
 
-Risk label counts:
-risk_label
-Low        482
-Medium     433
-High      1563
+Target (loan_status) counts:
+  0 (repaid / non-default): 25321
+  1 (default):              7088
+  default rate:             21.9%
 
-Leakage warning:
-`risk_probability` and `port_delay_days` are preserved here for EDA,
-but must be dropped before model fitting.
+Missing values preserved for pipeline imputation:
+  person_emp_length nulls: 887
+  loan_int_rate nulls:     3094
+
+Leakage note:
+`loan_status` is a real observed outcome. All remaining columns are
+decision-time loan/applicant attributes (no synthetic target leakage).

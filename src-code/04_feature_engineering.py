@@ -2,15 +2,19 @@
 DAP391m Project 8 - Feature Engineering & Preprocessing
 =======================================================
 
-Builds leakage-safe engineered features from Data/filtered/clean_data.csv and
+Builds engineered credit-risk features from Data/filtered/clean_data.csv and
 exports train/test matrices for downstream experiments.
 
 The official deployment model is trained by src-code/05_modeling.py, which
 contains its own pipeline object for Streamlit compatibility. This script keeps
 the reproducible feature-engineering deliverables required by the project plan.
 
+There is no target leakage to drop here (loan_status is a real outcome); all
+engineered features are derived from decision-time applicant/loan attributes.
+
 Run:
     .venv/bin/python3 src-code/04_feature_engineering.py
+    (run src-code/01_ingestion_cleaning.py first)
 """
 
 from __future__ import annotations
@@ -37,13 +41,16 @@ OUT_DIR = PROJECT_ROOT / "Data" / "filtered" / "processed"
 ARTIFACT_DIR = OUT_DIR / "artifacts"
 ENGINEERED_CSV = PROJECT_ROOT / "Data" / "filtered" / "engineered_features.csv"
 
-TARGET_COL = "risk_label"
-TARGET_INT_COL = "target"
-CLASS_LABELS = ["Low", "Medium", "High"]
-LABEL_TO_INT = {label: idx for idx, label in enumerate(CLASS_LABELS)}
+TARGET_COL = "loan_status"
+CLASS_LABELS = ["Non-default", "Default"]
 
-LEAKAGE_COLS = ["risk_probability", "port_delay_days"]
-DROP_FEATURE_COLS = ["machine_id", "timestamp"]
+BASE_CATEGORICAL = [
+    "person_home_ownership",
+    "loan_intent",
+    "loan_grade",
+    "cb_person_default_on_file",
+]
+ENGINEERED_CATEGORICAL = ["income_bracket", "age_bracket", "loan_amount_bracket"]
 
 
 def load_clean_data() -> pd.DataFrame:
@@ -52,64 +59,38 @@ def load_clean_data() -> pd.DataFrame:
             f"{INPUT_CSV} not found. Run src-code/01_ingestion_cleaning.py first."
         )
     df = pd.read_csv(INPUT_CSV)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    if df["timestamp"].isna().any():
-        raise ValueError("clean_data.csv contains invalid timestamps")
+    if TARGET_COL not in df.columns:
+        raise ValueError(f"{TARGET_COL} not found in {INPUT_CSV.name}")
     return df
 
 
-def _minmax(series: pd.Series) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce")
-    low = values.min()
-    high = values.max()
-    if pd.isna(low) or pd.isna(high) or high == low:
-        return pd.Series(0.0, index=series.index)
-    return (values - low) / (high - low)
-
-
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.sort_values("timestamp").reset_index(drop=True).copy()
+    out = df.copy()
 
-    out["order_month"] = out["timestamp"].dt.month
-    out["order_weekday"] = out["timestamp"].dt.dayofweek
-    out["order_hour"] = out["timestamp"].dt.hour
+    # Debt-burden and credit-history ratios (decision-time, leakage-safe).
+    out["high_debt_burden"] = (out["loan_percent_income"] > 0.30).astype(int)
+    out["credit_hist_ratio"] = (
+        out["cb_person_cred_hist_length"] / out["person_age"]
+    ).round(4)
+    out["interest_to_income"] = (
+        ((out["loan_int_rate"] / 100.0) * out["loan_amnt"]) / out["person_income"]
+    ).round(4)
 
-    grouped_lead = out.groupby("supplier_id")["supplier_lead_time_days"]
-    out["supplier_avg_lead"] = grouped_lead.transform(
-        lambda s: s.expanding().mean().shift(1)
-    )
-    out["supplier_std_lead"] = grouped_lead.transform(
-        lambda s: s.expanding().std().shift(1)
-    )
-
-    out["supplier_avg_lead"] = out["supplier_avg_lead"].fillna(
-        out["supplier_lead_time_days"].median()
-    )
-    out["supplier_std_lead"] = out["supplier_std_lead"].fillna(0.0)
-
-    lead_avg_norm = _minmax(out["supplier_avg_lead"])
-    lead_std_norm = _minmax(out["supplier_std_lead"])
-    quality_risk = ((100 - out["supplier_quality_score"]) / 100).clip(0, 1)
-    reliability_risk = (1 - out["supplier_reliability_index"]).clip(0, 1)
-    out["supplier_risk_score"] = (
-        lead_avg_norm * 0.4
-        + lead_std_norm * 0.3
-        + quality_risk * 0.2
-        + reliability_risk * 0.1
-    )
-
-    weather_norm = _minmax(out["weather_disruption_score"])
-    fuel_norm = _minmax(out["fuel_price_index"])
-    demand_norm = _minmax(out["market_demand_index"])
-    out["external_risk_score"] = (
-        weather_norm * 0.5 + fuel_norm * 0.3 + (1 - demand_norm) * 0.2
-    )
-
-    out[TARGET_COL] = out[TARGET_COL].astype(str).str.strip()
-    unknown = sorted(set(out[TARGET_COL]) - set(CLASS_LABELS))
-    if unknown:
-        raise ValueError(f"Unexpected risk_label values: {unknown}")
-    out[TARGET_INT_COL] = out[TARGET_COL].map(LABEL_TO_INT)
+    out["income_bracket"] = pd.cut(
+        out["person_income"],
+        bins=[-1, 30000, 60000, 100000, float("inf")],
+        labels=["<30k", "30k-60k", "60k-100k", "100k+"],
+    ).astype(str)
+    out["age_bracket"] = pd.cut(
+        out["person_age"],
+        bins=[-1, 25, 35, 50, float("inf")],
+        labels=["<=25", "26-35", "36-50", "50+"],
+    ).astype(str)
+    out["loan_amount_bracket"] = pd.cut(
+        out["loan_amnt"],
+        bins=[-1, 5000, 10000, 20000, float("inf")],
+        labels=["<5k", "5k-10k", "10k-20k", "20k+"],
+    ).astype(str)
 
     return out
 
@@ -181,12 +162,11 @@ def main() -> None:
 
     raw = load_clean_data()
     engineered = add_engineered_features(raw)
+    engineered.to_csv(ENGINEERED_CSV, index=False)
 
-    feature_df = engineered.drop(columns=[*LEAKAGE_COLS, *DROP_FEATURE_COLS])
-    feature_df.to_csv(ENGINEERED_CSV, index=False)
+    y = engineered[TARGET_COL].astype(int)
+    X = engineered.drop(columns=[TARGET_COL])
 
-    y = feature_df[TARGET_INT_COL].astype(int)
-    X = feature_df.drop(columns=[TARGET_COL, TARGET_INT_COL])
     categorical_cols = X.select_dtypes(
         include=["object", "string", "category"]
     ).columns.tolist()
@@ -222,8 +202,8 @@ def main() -> None:
     X_test_tree.to_csv(OUT_DIR / "X_test_tree.csv", index=False)
     X_train_scaled.to_csv(OUT_DIR / "X_train_scaled.csv", index=False)
     X_test_scaled.to_csv(OUT_DIR / "X_test_scaled.csv", index=False)
-    y_train.to_frame(TARGET_INT_COL).to_csv(OUT_DIR / "y_train.csv", index=False)
-    y_test.to_frame(TARGET_INT_COL).to_csv(OUT_DIR / "y_test.csv", index=False)
+    y_train.to_frame(TARGET_COL).to_csv(OUT_DIR / "y_train.csv", index=False)
+    y_test.to_frame(TARGET_COL).to_csv(OUT_DIR / "y_test.csv", index=False)
 
     with (ARTIFACT_DIR / "preprocessor_tree.pkl").open("wb") as handle:
         pickle.dump(tree_preprocessor, handle)
@@ -235,23 +215,26 @@ def main() -> None:
         "engineered_features": str(ENGINEERED_CSV.relative_to(PROJECT_ROOT)),
         "random_state": RANDOM_STATE,
         "test_size": TEST_SIZE,
+        "target": TARGET_COL,
         "class_labels": CLASS_LABELS,
-        "label_to_int": LABEL_TO_INT,
         "n_train": int(len(X_train)),
         "n_test": int(len(X_test)),
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
         "feature_columns_tree": list(X_train_tree.columns),
         "feature_columns_scaled": list(X_train_scaled.columns),
-        "leakage_columns_dropped": LEAKAGE_COLS,
         "iqr_bounds": iqr_bounds,
     }
     (ARTIFACT_DIR / "metadata.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"
     )
 
-    print(f"Saved {ENGINEERED_CSV.relative_to(PROJECT_ROOT)} ({feature_df.shape})")
+    print(f"Saved {ENGINEERED_CSV.relative_to(PROJECT_ROOT)} ({engineered.shape})")
     print(f"Saved processed matrices to {OUT_DIR.relative_to(PROJECT_ROOT)}")
+    print(
+        f"  train={len(X_train)} test={len(X_test)} "
+        f"features_tree={X_train_tree.shape[1]}"
+    )
 
 
 if __name__ == "__main__":
