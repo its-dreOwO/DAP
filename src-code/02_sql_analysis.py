@@ -2,14 +2,14 @@
 DAP391m Project 8 - SQL Analysis
 ================================
 
-Builds an in-memory SQLite database from the cleaned credit dataset
+Builds an in-memory SQLite database from the cleaned DataCo dataset
 (Data/filtered/clean_data.csv), executes the six SQL queries in
 sql/analysis.sql, and saves each result under Data/filtered/sql_outputs/.
 
-The credit dataset is a single flat table, so it is loaded as one SQLite
-table named `credit`. The queries cover default-rate analysis by grade,
-home ownership, intent, income band, loan-amount band, and a grade
-penetration index.
+The cleaned dataset is a single flat table (order-item grain), so it is loaded
+as one SQLite table named `deliveries`. The queries cover late-delivery-rate
+analysis by shipping mode, order region, market, product department, and
+customer segment, plus a shipping-mode penetration index.
 
 Run:
     .venv/bin/python3 src-code/02_sql_analysis.py
@@ -33,7 +33,7 @@ OUTPUT_DIR = PROJECT_ROOT / "Data" / "filtered" / "sql_outputs"
 EXPECTED_QUERIES = 6
 
 
-def load_credit() -> pd.DataFrame:
+def load_deliveries() -> pd.DataFrame:
     if not CLEAN_CSV.exists():
         raise FileNotFoundError(
             f"{CLEAN_CSV} not found. Run src-code/01_ingestion_cleaning.py first."
@@ -52,10 +52,10 @@ def split_sql_queries(sql_text: str) -> list[tuple[str, str]]:
     return queries
 
 
-def execute_queries(credit: pd.DataFrame) -> dict[str, pd.DataFrame]:
+def execute_queries(deliveries: pd.DataFrame) -> dict[str, pd.DataFrame]:
     conn = sqlite3.connect(":memory:")
     try:
-        credit.to_sql("credit", conn, index=False, if_exists="replace")
+        deliveries.to_sql("deliveries", conn, index=False, if_exists="replace")
         queries = split_sql_queries(SQL_FILE.read_text(encoding="utf-8"))
         if len(queries) != EXPECTED_QUERIES:
             raise ValueError(
@@ -68,8 +68,8 @@ def execute_queries(credit: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    credit = load_credit()
-    outputs = execute_queries(credit)
+    deliveries = load_deliveries()
+    outputs = execute_queries(deliveries)
     for name, result in outputs.items():
         out_path = OUTPUT_DIR / f"{name}.csv"
         result.to_csv(out_path, index=False)

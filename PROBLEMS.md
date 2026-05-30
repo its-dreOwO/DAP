@@ -4,6 +4,74 @@ This file tracks decisions and issues that need everyone's input before we proce
 Add your name and opinion next to each item. Once consensus is reached, mark it
 **RESOLVED** and note the decision.
 
+> **⚠️ 2026-05-30 — second pivot to DataCo supply chain.** See
+> `report/dataco_dataset_assessment.md`. Several items below (P1, P7) were
+> written for the imbalanced credit dataset and are now **moot** because the
+> DataCo target is balanced (54.8/45.2). New decisions are P9–P11.
+
+---
+
+## P9 — Modeling grain: order vs order-item
+
+**Context:** DataCo is order-item grain — 180,519 rows but only **65,752 unique
+orders** (~2.75 items/order). Within an order, items share the outcome and every
+signal-bearing feature; they differ only on product/qty/price (noise for
+lateness). A `GroupShuffleSplit` on `Order Id` is mandatory either way. Order
+grain is cleaner ("65k shipments"); item grain inflates N without adding signal
+(ROC-AUC 0.734 item vs 0.752 order).
+
+**Question:** Model at order grain (recommended) or keep item grain?
+
+| Name | Opinion |
+|------|---------|
+| Khánh | |
+| Đăng | |
+| Bảo | |
+
+**Status:** ⬜ Open — **recommended: order grain**
+
+---
+
+## P10 — The model barely beats a one-line rule: how do we frame it?
+
+**Context:** `Shipping Mode` and `Days for shipment (scheduled)` are perfectly
+collinear, and lateness is essentially the shipping mode's base rate. A trivial
+"predict each mode's historical late rate" rule scores ROC-AUC 0.725; four ML
+models add only +0.01 ROC / +0.06 PR. Late rates are flat (~55%) across market,
+region, segment, department. DataCo is a **simulated** dataset.
+
+**Question:** Agree to (a) lead the report with the base-rate benchmark,
+(b) add a within-mode "residual signal" analysis, and (c) disclose the simulated
+nature — rather than presenting 0.73 AUC as a rich multivariate result?
+
+| Name | Opinion |
+|------|---------|
+| Khánh | |
+| Đăng | |
+| Bảo | |
+
+**Status:** ⬜ Open — **recommended: yes to all three**
+
+---
+
+## P11 — Replace the imbalance experiment with business-cost threshold tuning
+
+**Context:** With balanced classes, the `class_weight='balanced'` /
+`scale_pos_weight` experiment (P7) is pointless and PR-AUC ≈ prevalence. The
+threshold-tuning deliverable can instead be framed around the asymmetric
+**business cost** of flagging an on-time shipment vs. missing a late one.
+
+**Question:** Drop the imbalance-weighted experiment and reframe threshold
+tuning as a cost trade-off?
+
+| Name | Opinion |
+|------|---------|
+| Khánh | |
+| Đăng | |
+| Bảo | |
+
+**Status:** ⬜ Open — **recommended: yes**
+
 ---
 
 ## P1 — Primary Evaluation Metric: PR-AUC vs. ROC-AUC
@@ -21,7 +89,7 @@ side-by-side and let the reader judge?
 | Đăng | |
 | Bảo | |
 
-**Status:** ⬜ Open
+**Status:** ⬜ Open — ⚠️ **moot after DataCo pivot (balanced target); see P11**
 
 ---
 
@@ -58,7 +126,7 @@ but involve a metric tradeoff.
 | Đăng | |
 | Bảo | |
 
-**Status:** ⬜ Open
+**Status:** ⬜ Open — ⚠️ **moot after DataCo pivot (balanced target); see P11**
 
 ---
 

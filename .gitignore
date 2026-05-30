@@ -8,3 +8,10 @@ __pycache__/
 # RandomForest pickles exceed GitHub 100MB on the 32k-row dataset; regenerate via src-code/05_modeling.py
 Data/filtered/model_outputs/random_forest_model.pkl
 Data/filtered/model_outputs/imbalance_weighted/random_forest_model.pkl
+
+# Raw DataCo dataset (large; tokenized_access_logs.csv is unused). Re-download via:
+#   kaggle datasets download -d shashwatwork/dataco-smart-supply-chain-for-big-data-analysis -p Data/dataco_raw --unzip
+Data/dataco_raw/
+
+# Cleaned DataCo CSV is 52MB (180k rows). Regenerate via src-code/01_ingestion_cleaning.py
+Data/filtered/clean_data.csv

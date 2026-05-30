@@ -1,104 +1,94 @@
--- Consumer Credit-Default Risk Analysis
+-- Supplier Lead-Time & Late-Delivery Risk Analysis (DataCo Smart Supply Chain)
 -- Run against the SQLite DB built in src-code/02_sql_analysis.py
--- (single table `credit`, loaded from Data/filtered/clean_data.csv).
+-- (single table `deliveries`, loaded from Data/filtered/clean_data.csv).
 --
--- The original supply-chain queries (monthly delay trends, year-over-year
--- growth, carrier penetration) do not apply: this dataset has no date column
--- and no carrier. They are replaced by the credit-risk analogues below.
+-- The table is at order-ITEM grain. `Late_delivery_risk` is the binary target
+-- (1 = late). Column names contain spaces/parentheses, so they are quoted with
+-- double quotes per SQLite. Rates are computed at item grain, the table's
+-- natural grain, so orders with more items contribute proportionally more rows.
 
--- 1. Default rate by loan grade
+-- 1. Late-delivery rate by shipping mode
 SELECT
-    loan_grade,
-    COUNT(*)                                                       AS total_loans,
-    SUM(loan_status)                                               AS defaults,
-    ROUND(100.0 * SUM(loan_status) / COUNT(*), 1)                  AS default_rate_pct,
-    ROUND(AVG(loan_int_rate), 2)                                   AS avg_int_rate
-FROM credit
-GROUP BY loan_grade
-ORDER BY loan_grade;
+    "Shipping Mode"                                                AS shipping_mode,
+    COUNT(*)                                                       AS total_items,
+    SUM("Late_delivery_risk")                                      AS late_items,
+    ROUND(100.0 * SUM("Late_delivery_risk") / COUNT(*), 1)         AS late_rate_pct,
+    ROUND(AVG("Days for shipment (scheduled)"), 2)                 AS avg_scheduled_days
+FROM deliveries
+GROUP BY "Shipping Mode"
+ORDER BY late_rate_pct DESC;
 
 
--- 2. Default rate by home ownership
+-- 2. Late-delivery rate by order region
 SELECT
-    person_home_ownership,
-    COUNT(*)                                                       AS total_loans,
-    SUM(loan_status)                                               AS defaults,
-    ROUND(100.0 * SUM(loan_status) / COUNT(*), 1)                  AS default_rate_pct,
-    ROUND(AVG(loan_amnt), 0)                                       AS avg_loan_amnt
-FROM credit
-GROUP BY person_home_ownership
-ORDER BY default_rate_pct DESC;
+    "Order Region"                                                 AS order_region,
+    COUNT(*)                                                       AS total_items,
+    SUM("Late_delivery_risk")                                      AS late_items,
+    ROUND(100.0 * SUM("Late_delivery_risk") / COUNT(*), 1)         AS late_rate_pct
+FROM deliveries
+GROUP BY "Order Region"
+ORDER BY late_rate_pct DESC;
 
 
--- 3. Default rate by loan intent
+-- 3. Late-delivery rate by market
 SELECT
-    loan_intent,
-    COUNT(*)                                                       AS total_loans,
-    SUM(loan_status)                                               AS defaults,
-    ROUND(100.0 * SUM(loan_status) / COUNT(*), 1)                  AS default_rate_pct,
-    ROUND(AVG(loan_percent_income), 3)                            AS avg_loan_pct_income
-FROM credit
-GROUP BY loan_intent
-ORDER BY default_rate_pct DESC;
+    "Market"                                                       AS market,
+    COUNT(*)                                                       AS total_items,
+    SUM("Late_delivery_risk")                                      AS late_items,
+    ROUND(100.0 * SUM("Late_delivery_risk") / COUNT(*), 1)         AS late_rate_pct,
+    ROUND(AVG("Sales"), 2)                                         AS avg_sales
+FROM deliveries
+GROUP BY "Market"
+ORDER BY late_rate_pct DESC;
 
 
--- 4. Default rate by income band
+-- 4. Late-delivery rate by product department
 SELECT
-    CASE
-        WHEN person_income < 30000  THEN '1. <30k'
-        WHEN person_income < 60000  THEN '2. 30k-60k'
-        WHEN person_income < 100000 THEN '3. 60k-100k'
-        ELSE                             '4. 100k+'
-    END                                                            AS income_band,
-    COUNT(*)                                                       AS total_loans,
-    SUM(loan_status)                                               AS defaults,
-    ROUND(100.0 * SUM(loan_status) / COUNT(*), 1)                  AS default_rate_pct
-FROM credit
-GROUP BY income_band
-ORDER BY income_band;
+    "Department Name"                                              AS department,
+    COUNT(*)                                                       AS total_items,
+    SUM("Late_delivery_risk")                                      AS late_items,
+    ROUND(100.0 * SUM("Late_delivery_risk") / COUNT(*), 1)         AS late_rate_pct
+FROM deliveries
+GROUP BY "Department Name"
+ORDER BY late_rate_pct DESC;
 
 
--- 5. Default rate by loan-amount band
+-- 5. Late-delivery rate by customer segment
 SELECT
-    CASE
-        WHEN loan_amnt < 5000   THEN '1. <5k'
-        WHEN loan_amnt < 10000  THEN '2. 5k-10k'
-        WHEN loan_amnt < 20000  THEN '3. 10k-20k'
-        ELSE                         '4. 20k+'
-    END                                                            AS loan_amount_band,
-    COUNT(*)                                                       AS total_loans,
-    SUM(loan_status)                                               AS defaults,
-    ROUND(100.0 * SUM(loan_status) / COUNT(*), 1)                  AS default_rate_pct,
-    ROUND(AVG(loan_percent_income), 3)                            AS avg_loan_pct_income
-FROM credit
-GROUP BY loan_amount_band
-ORDER BY loan_amount_band;
+    "Customer Segment"                                             AS customer_segment,
+    COUNT(*)                                                       AS total_items,
+    SUM("Late_delivery_risk")                                      AS late_items,
+    ROUND(100.0 * SUM("Late_delivery_risk") / COUNT(*), 1)         AS late_rate_pct,
+    ROUND(AVG("Order Item Discount Rate"), 3)                      AS avg_discount_rate
+FROM deliveries
+GROUP BY "Customer Segment"
+ORDER BY late_rate_pct DESC;
 
 
--- 6. Grade penetration index (grade's share of defaults vs share of volume)
+-- 6. Shipping-mode penetration index (mode's share of late deliveries vs share of volume)
 WITH totals AS (
-    SELECT COUNT(*) AS grand_total,
-           SUM(loan_status) AS total_defaults
-    FROM credit
+    SELECT COUNT(*)                  AS grand_total,
+           SUM("Late_delivery_risk") AS total_late
+    FROM deliveries
 ),
-grade_stats AS (
+mode_stats AS (
     SELECT
-        loan_grade,
-        COUNT(*)         AS grade_volume,
-        SUM(loan_status) AS grade_defaults
-    FROM credit
-    GROUP BY loan_grade
+        "Shipping Mode"           AS shipping_mode,
+        COUNT(*)                  AS mode_volume,
+        SUM("Late_delivery_risk") AS mode_late
+    FROM deliveries
+    GROUP BY "Shipping Mode"
 )
 SELECT
-    g.loan_grade,
-    g.grade_volume,
-    g.grade_defaults,
-    ROUND(100.0 * g.grade_volume   / t.grand_total,    1)          AS volume_share_pct,
-    ROUND(100.0 * g.grade_defaults / t.total_defaults, 1)          AS default_share_pct,
+    m.shipping_mode,
+    m.mode_volume,
+    m.mode_late,
+    ROUND(100.0 * m.mode_volume / t.grand_total, 1)                AS volume_share_pct,
+    ROUND(100.0 * m.mode_late   / t.total_late,  1)                AS late_share_pct,
     ROUND(
-        (1.0 * g.grade_defaults / NULLIF(g.grade_volume, 0))
-      / (1.0 * t.total_defaults / NULLIF(t.grand_total,  0)),
+        (1.0 * m.mode_late / NULLIF(m.mode_volume, 0))
+      / (1.0 * t.total_late / NULLIF(t.grand_total, 0)),
         2
     )                                                              AS penetration_index
-FROM grade_stats g, totals t
+FROM mode_stats m, totals t
 ORDER BY penetration_index DESC;

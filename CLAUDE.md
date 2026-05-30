@@ -4,9 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**DAP391m — Project 8: Consumer Credit-Default Risk Prediction** FPT University HCMC, Summer 2026. Group 8: Nguyễn Hoài Khánh, Hồ Lâm Bảo Đăng, Dương Gia Bảo. Supervisor: Mr. Nguyen Hoai Linh.
+**DAP391m — Project 8: Supplier Lead-Time & Late-Delivery Risk Prediction** FPT University HCMC, Summer 2026. Group 8: Nguyễn Hoài Khánh, Hồ Lâm Bảo Đăng, Dương Gia Bảo. Supervisor: Mr. Nguyen Hoai Linh.
 
-> **Domain pivot (2026-05-29):** The project moved from *Supplier Lead-Time Risk* to *Consumer Credit-Default Risk*. The original `supply_chain_risk_dataset.csv` had a synthetically-derived target (`risk_label` was generated from `port_delay_days`); after removing leakage columns the four models scored ROC-AUC ≈ 0.52 (near-random). The supervisor approved switching to a real dataset. All supply-chain data and outputs are preserved under `Data/archived/`. The supervisor's first suggested dataset (`uciml/german-credit`) was rejected because that Kaggle upload has **no target column**; the `laotse/credit-risk-dataset` was verified to have genuine signal (quick RF ROC-AUC ≈ 0.93) and was adopted.
+> **⚠️ ACTIVE PIVOT (2026-05-30) — back to supply chain, DataCo dataset. MIGRATION IN PROGRESS.**
+> The supervisor said he had **confused the group's topic** and asked to return to supply chain using the **DataCo Smart Supply Chain** dataset (`shashwatwork/dataco-smart-supply-chain-for-big-data-analysis`, CC0), retitled *"Supplier Lead-Time and Late Delivery Risk Prediction for Retail Procurement."* New target: **`Late_delivery_risk`** (binary, 1 = late).
+>
+> **Read `report/dataco_dataset_assessment.md` first** — it is the honest viability record. Key findings: the target is leak-free, but `Shipping Mode` and `Days for shipment (scheduled)` are *perfectly collinear* and the whole problem collapses to a per-shipping-mode base rate (a one-line lookup scores ROC-AUC 0.725; four ML models add only +0.01 ROC / +0.06 PR). Classes are **balanced (54.8/45.2) → the class-imbalance / `scale_pos_weight` deliverable is now moot** (reframe threshold tuning as business cost). Data is **order-item grain (65,752 orders, ~2.75 items each) → `GroupShuffleSplit` on `Order Id` is mandatory**; order grain is the cleaner unit. DataCo is a **simulated** dataset — disclose it in the report.
+>
+> **Migration status:** ✅ `01`, `02`+`sql/analysis.sql` migrated to DataCo. ⬜ `03`–`06`, `app/`, `report/main.tex`, and **every CLAUDE.md section below still describes the credit dataset and is pending migration** — do not trust them for DataCo until updated.
+>
+> **Pivot history.** (1) Original *supplier lead-time* dataset had a synthetic leakage target (ROC-AUC ≈ 0.52). (2) **2026-05-29** pivoted to *consumer credit-default risk* (`laotse/credit-risk-dataset`, XGBoost PR-AUC ≈ 0.91); supervisor's `uciml/german-credit` suggestion was rejected (no target column). (3) **2026-05-30** supervisor reversed to DataCo supply chain (this banner). All prior data/outputs preserved under `Data/archived/` and in git history.
 
 ## Python Environment
 

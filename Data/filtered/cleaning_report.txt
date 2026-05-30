@@ -1,22 +1,56 @@
 DAP391m ingestion and cleaning report
 ========================================
-Input: Data/credit_risk_dataset.csv
+Input:  Data/dataco_raw/DataCoSupplyChainDataset.csv
 Output: Data/filtered/clean_data.csv
-Input rows: 32581
-Impossible-value rows removed: 7
-Duplicate rows removed: 165
-Output rows: 32409
-Columns: 12
+Input rows x cols:  180519 x 53
+Output rows x cols: 180519 x 29
+Impossible-value rows removed: 0
+Duplicate rows removed:        0
 
-Target (loan_status) counts:
-  0 (repaid / non-default): 25321
-  1 (default):              7088
-  default rate:             21.9%
+Grain (IMPORTANT for splitting):
+  rows (order items): 180519
+  unique orders:      65752
+  items per order:    2.75
+  -> use a GROUP-AWARE split on `Order Id`; items from one order
+     share one outcome and must not straddle train/test.
 
-Missing values preserved for pipeline imputation:
-  person_emp_length nulls: 887
-  loan_int_rate nulls:     3094
+Target (Late_delivery_risk) counts:
+  0 (on-time / early): 81542
+  1 (late delivery):   98977
+  late-delivery rate:  54.8%
+
+Columns dropped to prevent OUTCOME LEAKAGE (post-delivery):
+  - Days for shipping (real)
+  - Delivery Status
+  - shipping date (DateOrders)
+  - Order Status
+  - Benefit per order
+  - Order Profit Per Order
+  - Order Item Profit Ratio
+
+Columns dropped as PII:
+  - Customer Email
+  - Customer Password
+  - Customer Fname
+  - Customer Lname
+  - Customer Street
+  - Customer Zipcode
+
+Columns dropped as empty / redundant:
+  - Product Description
+  - Order Zipcode
+  - Product Image
+  - Product Status
+  - Category Id
+  - Department Id
+  - Product Card Id
+  - Product Category Id
+  - Order Item Cardprod Id
+  - Customer Id
+  - Order Customer Id
 
 Leakage note:
-`loan_status` is a real observed outcome. All remaining columns are
-decision-time loan/applicant attributes (no synthetic target leakage).
+`Late_delivery_risk` equals (Delivery Status == 'Late delivery') exactly and
+(real shipping days > scheduled days) ~97.5%. Those columns reconstruct
+the label and are removed. Kept columns are all known at order time
+(scheduled days, shipping mode, geography, product, customer segment).

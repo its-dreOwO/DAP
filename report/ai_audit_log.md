@@ -12,8 +12,8 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 | Component | Logged | Required |
 |---|---|---|
-| Business & Problem Understanding | 1 | ≥ 2 |
-| Data Understanding & Preparation | 2 | ≥ 3 |
+| Business & Problem Understanding | 2 | ≥ 2 |
+| Data Understanding & Preparation | 3 | ≥ 3 |
 | EDA | 1 | ≥ 2 |
 | Modeling & Regression Analysis | 2 | ≥ 4 |
 | Evaluation, Visualization & Reporting | 2 | ≥ 3 |
@@ -80,6 +80,21 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 ---
 
+## Entry 005
+
+| Field | Content |
+|---|---|
+| **Entry #** | 005 |
+| **Prompt Type** | VERIFICATION / DECISION |
+| **Stage/Component** | Business & Problem Understanding; Data Understanding & Preparation |
+| **Problem/Context** | The supervisor reversed the topic again — said he had *confused the group's project* and asked to return to supply chain using the **DataCo Smart Supply Chain** dataset (retitled to late-delivery / supplier-risk). After two prior dataset failures, the student asked for an honest verdict: *is the dataset usable and are the models suitable for reporting?* |
+| **Prompt to AI** | "my supervisor responded … DataCo SMART SUPPLY CHAIN … adjust the title … predict delivery delay / supplier risk, not credit risk"; then "can you give me a honest review about the current situation is dataset usable and the models suitable for reporting?" |
+| **AI Response (Summary)** | AI downloaded DataCo (180,519 rows, target `Late_delivery_risk`, 54.8/45.2 balance) and verified it empirically. (1) **Leakage:** target == `Delivery Status=='Late delivery'` exactly and == `real>scheduled days` ~97.5% → dropped those + profit fields + PII in `01`. (2) **Group leakage:** order-item grain, 65,752 orders, target constant per order → `GroupShuffleSplit` on `Order Id` mandatory (honest baseline ROC-AUC 0.734 / PR-AUC 0.812). (3) **Decisive finding:** `Shipping Mode` and `Days for shipment (scheduled)` are *perfectly collinear*; a trivial per-mode base-rate rule scores ROC-AUC **0.725**, so four ML models add only **+0.01 ROC / +0.06 PR** — the problem collapses to one variable, and the flat ~55% segment rates are the fingerprint of a **simulated** dataset. **Verdict:** usable and reportable but a weaker problem than credit; recommended leading with the base-rate benchmark, reframing threshold tuning as business cost (imbalance deliverable now moot), adding within-mode residual analysis, modeling at order grain, and disclosing the simulated nature. Migrated `01`/`02`+`sql/analysis.sql` to DataCo; `03`–`06`/app/report pending. |
+| **Human Delta & Reflection** | *(To complete — answer all 4 questions):* [Critical Thinking: why does a one-line lookup nearly matching the ML models matter — what does +0.01 ROC tell you about the problem?] [Contextualization: explain the collinearity of shipping mode and scheduled days, and why faster classes are late more often.] [Creative Synthesis: how will the team frame an honest report around a near-deterministic target?] [Decision Ownership: record the group's calls on P9 (grain), P10 (framing), P11 (drop imbalance experiment).] |
+| **Evidence** | *(To complete):* [`report/dataco_dataset_assessment.md`; `Data/filtered/cleaning_report.txt` (drop-lists, 65,752 orders); `Data/filtered/sql_outputs/01_late_delivery_rate_by_shipping_mode.csv` (First Class 95.3% vs Standard 38.1%); the base-rate vs RF comparison (0.725 vs 0.734 ROC). Candidate hallucination-check: the supervisor's DataCo target is real but the *predictive task is near-trivial* — the high apparent accuracy is a base-rate artifact, not model skill.] |
+
+---
+
 <!-- Add new entries below as work progresses. Use the template:
 
 ## Entry 00X
@@ -109,4 +124,4 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 ---
 
-*Last updated: 2026-05-29 — Entry 004 added (dataset pivot to credit-default risk: signal verification + Kaggle dataset suitability check)*
+*Last updated: 2026-05-30 — Entry 005 added (second pivot to DataCo supply chain: leakage/group-leakage verification + honest base-rate benchmark showing the task collapses to a per-shipping-mode lookup)*

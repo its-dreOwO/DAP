@@ -1,0 +1,4 @@
+customer_segment,total_items,late_items,late_rate_pct,avg_discount_rate
+Home Office,32226,17747,55.1,0.102
+Consumer,93504,51248,54.8,0.102
+Corporate,54789,29982,54.7,0.102

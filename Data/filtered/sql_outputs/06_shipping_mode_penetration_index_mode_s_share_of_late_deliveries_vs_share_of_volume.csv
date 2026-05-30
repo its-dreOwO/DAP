@@ -1,0 +1,5 @@
+shipping_mode,mode_volume,mode_late,volume_share_pct,late_share_pct,penetration_index
+First Class,27814,26513,15.4,26.8,1.74
+Second Class,35216,26987,19.5,27.3,1.4
+Same Day,9737,4454,5.4,4.5,0.83
+Standard Class,107752,41023,59.7,41.4,0.69
