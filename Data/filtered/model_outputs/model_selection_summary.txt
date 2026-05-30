@@ -1,33 +1,35 @@
-DAP391m — Model Selection Summary (3-Class Risk Classification)
-====================================================================
+DAP391m — Model Selection Summary (Binary Credit-Default Classification)
+========================================================================
 
-Dataset: Data/supply_chain_risk_dataset.csv
-Target: risk_label (Low, Medium, High)
-Problem: 3-class multiclass classification
+Experiment: Baseline PR-AUC
+Dataset: Data/credit_risk_dataset.csv (cleaned)
+Target: loan_status (0 = Non-default, 1 = Default)
+Problem: binary classification (positive class = Default)
 
 Models trained:
   • Logistic Regression — baseline model
   • Decision Tree — simple baseline
   • Random Forest — ensemble comparison model
-  • XGBoost — PRIMARY model (deployment, SHAP, final report)
+  • XGBoost — official deployment + Streamlit model
 
-Primary metric: Macro PR-AUC (imbalance-aware multiclass evaluation)
+Primary metric: PR-AUC (average precision, imbalance-aware)
 
 Model comparison (test set):
-              model  accuracy  macro_precision  macro_recall  macro_f1  weighted_f1  macro_pr_auc  roc_auc_ovr_macro
-Logistic Regression    0.3609           0.3710        0.3765    0.3356       0.3901        0.3513             0.5240
-      Decision Tree    0.4899           0.3581        0.3584    0.3581       0.4906        0.3424             0.5215
-      Random Forest    0.6310           0.2103        0.3333    0.2579       0.4883        0.3393             0.5068
-            XGBoost    0.6069           0.3761        0.3457    0.3102       0.5101        0.3571             0.5258
+              model  accuracy  precision  recall     f1  pr_auc  roc_auc
+Logistic Regression    0.8806     0.7855  0.6248 0.6960  0.7635   0.8849
+      Decision Tree    0.9323     0.9776  0.7066 0.8203  0.8394   0.8952
+      Random Forest    0.9352     0.9646  0.7306 0.8315  0.8902   0.9343
+            XGBoost    0.9397     0.9795  0.7398 0.8429  0.9110   0.9517
 
-Best model by Macro PR-AUC: XGBoost
-  Macro PR-AUC: 0.3571
+Best model by PR-AUC: XGBoost
+  PR-AUC: 0.9110
+
+XGBoost F1-optimal threshold (tuned on train): 0.321
+(default 0.5 used for the comparison table; tuned threshold reported
+in threshold_analysis.txt for deployment decisions.)
 
 Saved artifacts:
-  • best_model.pkl — highest Macro PR-AUC pipeline
-  • primary_model.pkl — XGBoost pipeline (official deployment model)
+  • best_model.pkl — highest PR-AUC pipeline
+  • primary_model.pkl — XGBoost pipeline (official deployment + Streamlit model)
   • xgb_model.pkl — XGBoost pipeline (explainability / Streamlit)
-  • predictions_test.csv — XGBoost test-set predictions + probabilities
-
-Threshold tuning is NOT used as core model selection for this
-3-class pipeline (no single binary threshold applies to Low/Medium/High).
+  • predictions_test.csv — XGBoost test predictions + default probability

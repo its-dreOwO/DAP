@@ -1,4 +1,3 @@
-,Pred_Low,Pred_Medium,Pred_High
-Actual_Low,7,1,88
-Actual_Medium,7,3,77
-Actual_High,13,9,291
+,Pred_Non-default,Pred_Default
+Actual_Non-default,5042,22
+Actual_Default,369,1049

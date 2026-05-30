@@ -2,11 +2,13 @@
 DAP391m Project 8 - Advanced Visualization Exports
 ==================================================
 
-Creates Plotly HTML dashboards and CSV scorecards from cleaned data plus model
-outputs. Files are saved under Data/filtered/visualization_outputs/.
+Creates Plotly HTML dashboards and CSV scorecards from the cleaned credit
+dataset plus model outputs. Files are saved under
+Data/filtered/visualization_outputs/.
 
 Run:
     .venv/bin/python3 src-code/06_visualization_advanced.py
+    (run 01_ingestion_cleaning.py and 05_modeling.py first)
 """
 
 from __future__ import annotations
@@ -23,8 +25,7 @@ INPUT_CSV = DATA_DIR / "clean_data.csv"
 MODEL_OUTPUT_DIR = DATA_DIR / "model_outputs"
 OUTPUT_DIR = DATA_DIR / "visualization_outputs"
 
-LABEL_ORDER = ["Low", "Medium", "High"]
-RISK_SCORE = {"Low": 0, "Medium": 1, "High": 2}
+GRADE_ORDER = ["A", "B", "C", "D", "E", "F", "G"]
 
 
 def load_clean_data() -> pd.DataFrame:
@@ -32,112 +33,112 @@ def load_clean_data() -> pd.DataFrame:
         raise FileNotFoundError(
             f"{INPUT_CSV} not found. Run src-code/01_ingestion_cleaning.py first."
         )
-    df = pd.read_csv(INPUT_CSV, parse_dates=["timestamp"])
-    df["risk_label"] = df["risk_label"].astype(str).str.strip()
-    df["risk_score"] = df["risk_label"].map(RISK_SCORE)
-    return df
+    return pd.read_csv(INPUT_CSV)
 
 
-def build_supplier_scorecard(df: pd.DataFrame) -> pd.DataFrame:
+def build_grade_scorecard(df: pd.DataFrame) -> pd.DataFrame:
     scorecard = (
-        df.groupby("supplier_id", as_index=False)
+        df.groupby("loan_grade", as_index=False)
         .agg(
-            shipments=("supplier_id", "size"),
-            high_risk_shipments=("risk_label", lambda s: int((s == "High").sum())),
-            medium_risk_shipments=(
-                "risk_label",
-                lambda s: int((s == "Medium").sum()),
-            ),
-            high_risk_rate=("risk_label", lambda s: float((s == "High").mean())),
-            avg_risk_score=("risk_score", "mean"),
-            avg_risk_probability=("risk_probability", "mean"),
-            avg_lead_time_days=("supplier_lead_time_days", "mean"),
-            std_lead_time_days=("supplier_lead_time_days", "std"),
-            avg_port_delay_days=("port_delay_days", "mean"),
-            avg_quality_score=("supplier_quality_score", "mean"),
-            avg_reliability_index=("supplier_reliability_index", "mean"),
-            avg_weather_disruption=("weather_disruption_score", "mean"),
+            total_loans=("loan_status", "size"),
+            defaults=("loan_status", "sum"),
+            default_rate=("loan_status", "mean"),
+            avg_int_rate=("loan_int_rate", "mean"),
+            avg_loan_amnt=("loan_amnt", "mean"),
+            avg_loan_pct_income=("loan_percent_income", "mean"),
         )
         .round(4)
     )
     scorecard["risk_band"] = pd.cut(
-        scorecard["high_risk_rate"],
-        bins=[-0.01, 0.35, 0.65, 1.0],
+        scorecard["default_rate"],
+        bins=[-0.01, 0.20, 0.50, 1.0],
         labels=["Monitor", "Elevated", "Critical"],
     )
-    return scorecard.sort_values(
-        ["high_risk_rate", "avg_risk_probability", "avg_lead_time_days"],
-        ascending=False,
-    )
+    return scorecard.sort_values("default_rate", ascending=False)
 
 
-def save_supplier_ranking(scorecard: pd.DataFrame) -> None:
-    ranking = scorecard.head(25).copy()
-    ranking.to_csv(OUTPUT_DIR / "supplier_risk_ranking.csv", index=False)
-
+def save_grade_ranking(scorecard: pd.DataFrame) -> None:
+    scorecard.to_csv(OUTPUT_DIR / "grade_risk_scorecard.csv", index=False)
     fig = px.bar(
-        ranking.sort_values("high_risk_rate"),
-        x="high_risk_rate",
-        y="supplier_id",
+        scorecard.sort_values("default_rate"),
+        x="default_rate",
+        y="loan_grade",
         color="risk_band",
         orientation="h",
-        hover_data=[
-            "shipments",
-            "avg_risk_probability",
-            "avg_lead_time_days",
-            "avg_quality_score",
-            "avg_reliability_index",
-        ],
-        title="Top Supplier Risk Ranking",
-        labels={
-            "high_risk_rate": "High-risk shipment rate",
-            "supplier_id": "Supplier",
-            "risk_band": "Risk band",
-        },
+        hover_data=["total_loans", "defaults", "avg_int_rate", "avg_loan_amnt"],
+        title="Default Rate by Loan Grade",
+        labels={"default_rate": "Default rate", "loan_grade": "Loan grade"},
     )
-    fig.update_layout(height=800)
-    fig.write_html(OUTPUT_DIR / "supplier_risk_ranking.html", include_plotlyjs="cdn")
+    fig.update_xaxes(tickformat=".0%")
+    fig.write_html(OUTPUT_DIR / "grade_risk_ranking.html", include_plotlyjs="cdn")
 
 
-def save_risk_trend(df: pd.DataFrame) -> None:
-    trend = (
-        df.assign(month=df["timestamp"].dt.to_period("M").astype(str))
-        .groupby(["month", "risk_label"], as_index=False)
-        .size()
+def save_intent_default_rate(df: pd.DataFrame) -> None:
+    intent = (
+        df.groupby("loan_intent", as_index=False)["loan_status"]
+        .mean()
+        .rename(columns={"loan_status": "default_rate"})
+        .sort_values("default_rate", ascending=False)
     )
-    totals = trend.groupby("month")["size"].transform("sum")
-    trend["share"] = trend["size"] / totals
-    trend.to_csv(OUTPUT_DIR / "monthly_risk_trend.csv", index=False)
-
-    fig = px.line(
-        trend,
-        x="month",
-        y="share",
-        color="risk_label",
-        category_orders={"risk_label": LABEL_ORDER},
-        markers=True,
-        title="Monthly Risk Label Trend",
-        labels={"share": "Share of shipments", "month": "Month"},
+    intent.to_csv(OUTPUT_DIR / "intent_default_rate.csv", index=False)
+    fig = px.bar(
+        intent,
+        x="loan_intent",
+        y="default_rate",
+        color="default_rate",
+        color_continuous_scale="Reds",
+        title="Default Rate by Loan Intent",
+        labels={"loan_intent": "Loan intent", "default_rate": "Default rate"},
     )
     fig.update_yaxes(tickformat=".0%")
-    fig.write_html(OUTPUT_DIR / "risk_trend.html", include_plotlyjs="cdn")
+    fig.write_html(OUTPUT_DIR / "intent_default_rate.html", include_plotlyjs="cdn")
 
 
-def save_lead_time_distribution(df: pd.DataFrame) -> None:
-    fig = px.box(
-        df,
-        x="risk_label",
-        y="supplier_lead_time_days",
-        color="risk_label",
-        category_orders={"risk_label": LABEL_ORDER},
-        points="outliers",
-        title="Lead-Time Distribution by Risk Label",
-        labels={
-            "risk_label": "Risk label",
-            "supplier_lead_time_days": "Supplier lead time days",
-        },
+def save_income_default_heatmap(df: pd.DataFrame) -> None:
+    tmp = df.copy()
+    tmp["income_band"] = pd.cut(
+        tmp["person_income"],
+        bins=[-1, 30000, 60000, 100000, float("inf")],
+        labels=["<30k", "30k-60k", "60k-100k", "100k+"],
     )
-    fig.write_html(OUTPUT_DIR / "lead_time_distribution.html", include_plotlyjs="cdn")
+    pivot = (
+        tmp.pivot_table(
+            index="income_band",
+            columns="loan_grade",
+            values="loan_status",
+            aggfunc="mean",
+            observed=False,
+        )
+        .reindex(columns=GRADE_ORDER)
+        .round(3)
+    )
+    pivot.to_csv(OUTPUT_DIR / "income_grade_default_matrix.csv")
+    fig = px.imshow(
+        pivot,
+        text_auto=True,
+        color_continuous_scale="Reds",
+        title="Default Rate by Income Band × Loan Grade",
+        labels={"color": "Default rate"},
+    )
+    fig.write_html(
+        OUTPUT_DIR / "income_grade_default_matrix.html", include_plotlyjs="cdn"
+    )
+
+
+def save_loan_amount_distribution(df: pd.DataFrame) -> None:
+    plot_df = df.assign(status=df["loan_status"].map({0: "Non-default", 1: "Default"}))
+    fig = px.box(
+        plot_df,
+        x="status",
+        y="loan_percent_income",
+        color="status",
+        points="outliers",
+        title="Loan-to-Income Ratio by Loan Status",
+        labels={"status": "Loan status", "loan_percent_income": "Loan / income"},
+    )
+    fig.write_html(
+        OUTPUT_DIR / "loan_pct_income_distribution.html", include_plotlyjs="cdn"
+    )
 
 
 def save_model_summary_export() -> None:
@@ -147,21 +148,10 @@ def save_model_summary_export() -> None:
     comparison = pd.read_csv(comparison_path)
     comparison.to_csv(OUTPUT_DIR / "model_comparison_for_dashboard.csv", index=False)
 
-    metric_cols = [
-        "accuracy",
-        "macro_precision",
-        "macro_recall",
-        "macro_f1",
-        "weighted_f1",
-        "macro_pr_auc",
-        "roc_auc_ovr_macro",
-    ]
+    metric_cols = ["accuracy", "precision", "recall", "f1", "pr_auc", "roc_auc"]
     available = [col for col in metric_cols if col in comparison.columns]
     long_df = comparison.melt(
-        id_vars="model",
-        value_vars=available,
-        var_name="metric",
-        value_name="score",
+        id_vars="model", value_vars=available, var_name="metric", value_name="score"
     )
     fig = px.bar(
         long_df,
@@ -179,12 +169,12 @@ def save_model_summary_export() -> None:
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = load_clean_data()
-    scorecard = build_supplier_scorecard(df)
-    scorecard.to_csv(OUTPUT_DIR / "supplier_scorecard.csv", index=False)
 
-    save_supplier_ranking(scorecard)
-    save_risk_trend(df)
-    save_lead_time_distribution(df)
+    scorecard = build_grade_scorecard(df)
+    save_grade_ranking(scorecard)
+    save_intent_default_rate(df)
+    save_income_default_heatmap(df)
+    save_loan_amount_distribution(df)
     save_model_summary_export()
 
     print(f"Visualization outputs saved to {OUTPUT_DIR.relative_to(PROJECT_ROOT)}")

@@ -2,11 +2,15 @@
 DAP391m Project 8 - Exploratory Data Analysis
 =============================================
 
-Reads Data/filtered/clean_data.csv and saves focused EDA tables/figures under
-Data/filtered/eda_outputs/.
+Reads Data/filtered/clean_data.csv (consumer credit-default risk) and saves
+focused EDA tables/figures under Data/filtered/eda_outputs/.
+
+Unlike the previous dataset, there is genuine predictive signal here, so the
+correlation check is used to confirm signal (not to hunt for leakage).
 
 Run:
     .venv/bin/python3 src-code/03_eda.py
+    (run src-code/01_ingestion_cleaning.py first)
 """
 
 from __future__ import annotations
@@ -30,8 +34,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_CSV = PROJECT_ROOT / "Data" / "filtered" / "clean_data.csv"
 OUTPUT_DIR = PROJECT_ROOT / "Data" / "filtered" / "eda_outputs"
 
-TARGET_COL = "risk_label"
-LABEL_ORDER = ["Low", "Medium", "High"]
+TARGET_COL = "loan_status"
+TARGET_LABELS = {0: "Non-default", 1: "Default"}
+CATEGORICAL_COLS = [
+    "person_home_ownership",
+    "loan_intent",
+    "loan_grade",
+    "cb_person_default_on_file",
+]
 
 
 def load_clean_data() -> pd.DataFrame:
@@ -39,28 +49,27 @@ def load_clean_data() -> pd.DataFrame:
         raise FileNotFoundError(
             f"{INPUT_CSV} not found. Run src-code/01_ingestion_cleaning.py first."
         )
-    df = pd.read_csv(INPUT_CSV, parse_dates=["timestamp"])
+    df = pd.read_csv(INPUT_CSV)
     if TARGET_COL not in df.columns:
         raise ValueError(f"{TARGET_COL} not found in {INPUT_CSV.name}")
-    df[TARGET_COL] = df[TARGET_COL].astype(str).str.strip()
     return df
 
 
 def save_class_balance(df: pd.DataFrame) -> None:
-    counts = df[TARGET_COL].value_counts().reindex(LABEL_ORDER, fill_value=0)
+    counts = df[TARGET_COL].value_counts().reindex([0, 1], fill_value=0)
     balance = pd.DataFrame(
         {
-            TARGET_COL: counts.index,
+            "loan_status": [TARGET_LABELS[i] for i in counts.index],
             "count": counts.values,
             "percent": (counts.values / len(df) * 100).round(2),
         }
     )
     balance.to_csv(OUTPUT_DIR / "class_balance.csv", index=False)
 
-    fig, ax = plt.subplots(figsize=(7, 4))
-    sns.barplot(data=balance, x=TARGET_COL, y="count", order=LABEL_ORDER, ax=ax)
-    ax.set_title("Risk Label Class Balance")
-    ax.set_xlabel("Risk label")
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sns.barplot(data=balance, x="loan_status", y="count", ax=ax)
+    ax.set_title("Loan Status Class Balance")
+    ax.set_xlabel("Loan status")
     ax.set_ylabel("Rows")
     for container in ax.containers:
         ax.bar_label(container, fmt="%d")
@@ -70,7 +79,7 @@ def save_class_balance(df: pd.DataFrame) -> None:
 
 
 def save_numeric_distributions(df: pd.DataFrame) -> None:
-    numeric = df.select_dtypes(include="number")
+    numeric = df.select_dtypes(include="number").drop(columns=[TARGET_COL])
     numeric.describe().T.to_csv(OUTPUT_DIR / "numeric_summary.csv")
 
     cols = list(numeric.columns)
@@ -80,7 +89,7 @@ def save_numeric_distributions(df: pd.DataFrame) -> None:
     axes_flat = list(axes.ravel()) if hasattr(axes, "ravel") else [axes]
 
     for ax, col in zip(axes_flat, cols):
-        sns.histplot(df[col], kde=True, ax=ax)
+        sns.histplot(df[col].dropna(), kde=True, ax=ax)
         ax.set_title(col)
         ax.set_xlabel("")
 
@@ -93,83 +102,63 @@ def save_numeric_distributions(df: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def save_leakage_heatmap(df: pd.DataFrame) -> None:
-    columns = [
-        "risk_probability",
-        "port_delay_days",
-        "supplier_lead_time_days",
-        "supplier_quality_score",
-        "supplier_reliability_index",
-        "weather_disruption_score",
-        "market_demand_index",
-        "fuel_price_index",
-    ]
-    available = [col for col in columns if col in df.columns]
-    corr = df[available].corr(numeric_only=True)
-    corr.to_csv(OUTPUT_DIR / "leakage_correlation_matrix.csv")
+def save_signal_heatmap(df: pd.DataFrame) -> None:
+    numeric = df.select_dtypes(include="number")
+    corr = numeric.corr(numeric_only=True)
+    corr.to_csv(OUTPUT_DIR / "feature_correlation_matrix.csv")
+
+    # Correlation of each numeric feature with the target (signal confirmation).
+    target_corr = (
+        corr[TARGET_COL].drop(TARGET_COL).sort_values(key=abs, ascending=False)
+    )
+    target_corr.to_frame("corr_with_loan_status").to_csv(
+        OUTPUT_DIR / "feature_target_correlation.csv"
+    )
 
     fig, ax = plt.subplots(figsize=(9, 7))
     sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", center=0, ax=ax)
-    ax.set_title("Leakage and Supplier-Signal Correlation Check")
+    ax.set_title("Feature Correlation Matrix (incl. loan_status)")
     fig.tight_layout()
-    fig.savefig(OUTPUT_DIR / "leakage_correlation_heatmap.png", dpi=150)
+    fig.savefig(OUTPUT_DIR / "feature_correlation_heatmap.png", dpi=150)
     plt.close(fig)
 
 
-def save_supplier_outputs(df: pd.DataFrame) -> None:
-    supplier = (
-        df.groupby("supplier_id", as_index=False)
-        .agg(
-            shipments=("supplier_id", "size"),
-            avg_lead_time_days=("supplier_lead_time_days", "mean"),
-            std_lead_time_days=("supplier_lead_time_days", "std"),
-            avg_quality_score=("supplier_quality_score", "mean"),
-            avg_reliability_index=("supplier_reliability_index", "mean"),
-            high_risk_rate=(
-                TARGET_COL,
-                lambda s: (s == "High").mean(),
-            ),
+def save_default_rate_by_category(df: pd.DataFrame) -> None:
+    frames = []
+    for col in CATEGORICAL_COLS:
+        grp = (
+            df.groupby(col)[TARGET_COL]
+            .agg(total="size", defaults="sum")
+            .assign(default_rate=lambda g: (g["defaults"] / g["total"]).round(4))
+            .reset_index()
+            .rename(columns={col: "category_value"})
         )
-        .sort_values(["high_risk_rate", "avg_lead_time_days"], ascending=False)
-    )
-    supplier.to_csv(OUTPUT_DIR / "supplier_risk_summary.csv", index=False)
+        grp.insert(0, "feature", col)
+        frames.append(grp)
+    summary = pd.concat(frames, ignore_index=True)
+    summary.to_csv(OUTPUT_DIR / "default_rate_by_category.csv", index=False)
 
-    top_suppliers = supplier.head(20)["supplier_id"]
-    plot_df = df[df["supplier_id"].isin(top_suppliers)]
-    fig, ax = plt.subplots(figsize=(13, 6))
-    sns.boxplot(
-        data=plot_df,
-        x="supplier_id",
-        y="supplier_lead_time_days",
-        hue=TARGET_COL,
-        hue_order=LABEL_ORDER,
-        ax=ax,
-    )
-    ax.set_title("Supplier Lead-Time Spread (Top 20 Risk Suppliers)")
-    ax.set_xlabel("Supplier")
-    ax.set_ylabel("Lead time days")
-    ax.tick_params(axis="x", rotation=70)
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+    for ax, col in zip(axes.ravel(), CATEGORICAL_COLS):
+        rate = df.groupby(col)[TARGET_COL].mean().sort_values(ascending=False)
+        sns.barplot(x=rate.values, y=rate.index, ax=ax)
+        ax.set_title(f"Default rate by {col}")
+        ax.set_xlabel("Default rate")
+        ax.set_ylabel("")
+    fig.suptitle("Default Rate by Categorical Feature", y=1.0)
     fig.tight_layout()
-    fig.savefig(OUTPUT_DIR / "supplier_lead_time_spread.png", dpi=150)
+    fig.savefig(OUTPUT_DIR / "default_rate_by_category.png", dpi=150)
     plt.close(fig)
 
 
-def save_risk_label_summary(df: pd.DataFrame) -> None:
+def save_target_numeric_summary(df: pd.DataFrame) -> None:
+    numeric_cols = [
+        c for c in df.select_dtypes(include="number").columns if c != TARGET_COL
+    ]
     summary = (
-        df.groupby(TARGET_COL)
-        .agg(
-            rows=(TARGET_COL, "size"),
-            avg_lead_time_days=("supplier_lead_time_days", "mean"),
-            avg_port_delay_days=("port_delay_days", "mean"),
-            avg_risk_probability=("risk_probability", "mean"),
-            avg_quality_score=("supplier_quality_score", "mean"),
-            avg_reliability_index=("supplier_reliability_index", "mean"),
-            avg_weather_disruption=("weather_disruption_score", "mean"),
-        )
-        .reindex(LABEL_ORDER)
-        .round(4)
+        df.groupby(TARGET_COL)[numeric_cols].mean().round(3).rename(index=TARGET_LABELS)
     )
-    summary.to_csv(OUTPUT_DIR / "risk_label_summary.csv")
+    summary.to_csv(OUTPUT_DIR / "numeric_means_by_loan_status.csv")
 
 
 def main() -> None:
@@ -178,9 +167,9 @@ def main() -> None:
 
     save_class_balance(df)
     save_numeric_distributions(df)
-    save_leakage_heatmap(df)
-    save_supplier_outputs(df)
-    save_risk_label_summary(df)
+    save_signal_heatmap(df)
+    save_default_rate_by_category(df)
+    save_target_numeric_summary(df)
 
     print(f"EDA outputs saved to {OUTPUT_DIR.relative_to(PROJECT_ROOT)}")
 

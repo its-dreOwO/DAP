@@ -1,6 +1,7 @@
 # Project TODO — DAP391m Group 8
 
 > **Status key:** ✅ Done · 🔄 In Progress · ⬜ Not Started
+> **2026-05-29:** Project pivoted to **Consumer Credit-Default Risk** (`Data/credit_risk_dataset.csv`). Pipeline `01`–`06`, SQL, and the Streamlit app were rebuilt for the new dataset. Old supply-chain work is in `Data/archived/`.
 
 ---
 
@@ -9,8 +10,8 @@
 | Task | File | Status |
 |------|------|--------|
 | Define data architecture & column roles | `CLAUDE.md` | ✅ |
-| Ingest & clean raw dataset | `src-code/01_ingestion_cleaning.py` | ✅ |
-| Produce `clean_data.csv` | `Data/filtered/clean_data.csv` | ✅ |
+| Ingest & clean credit dataset (impossible-value + dup removal) | `src-code/01_ingestion_cleaning.py` | ✅ |
+| Produce `clean_data.csv` (32,409 rows) | `Data/filtered/clean_data.csv` | ✅ |
 
 ---
 
@@ -18,12 +19,13 @@
 
 | Task | File | Status |
 |------|------|--------|
-| Write all 6 required SQL queries | `sql/analysis.sql` | ✅ |
-| Execute queries & save results in Python | `src-code/02_sql_analysis.py` | ✅ |
-| EDA: distributions, heatmap, class balance | `src-code/03_eda.py` | ✅ |
-| Feature engineering (temporal, expanding window, OHE) | `src-code/04_feature_engineering.py` | ✅ |
-| Train 4 models + SHAP on XGBoost | `src-code/05_modeling.py` | ✅ |
-| Evaluate: PR-AUC, Recall, ROC-AUC, F1 | `src-code/05_modeling.py` | ✅ |
+| 6 credit SQL queries (grade/home/intent/income/amount/penetration) | `sql/analysis.sql` | ✅ |
+| Execute queries & save results | `src-code/02_sql_analysis.py` | ✅ |
+| EDA: distributions, correlation heatmap, default-rate-by-category | `src-code/03_eda.py` | ✅ |
+| Feature engineering (debt burden, ratios, brackets, OHE) | `src-code/04_feature_engineering.py` | ✅ |
+| Train 4 binary models + SHAP on XGBoost | `src-code/05_modeling.py` | ✅ |
+| Evaluate: PR-AUC, Recall, ROC-AUC, F1 + threshold tuning | `src-code/05_modeling.py` | ✅ |
+| Baseline + imbalance-weighted experiments | `Data/filtered/model_outputs/` | ✅ |
 
 ---
 
@@ -31,7 +33,7 @@
 
 | Task | File | Status |
 |------|------|--------|
-| Plotly supplier ranking, boxplots, trend lines | `src-code/06_visualization_advanced.py` | ✅ |
+| Plotly: default rate by grade/intent, income×grade matrix, model comparison | `src-code/06_visualization_advanced.py` | ✅ |
 | Odds-ratio analysis (Logistic Regression interpretation) | `src-code/05_modeling.py` | ⬜ optional report add-on |
 
 ---
@@ -40,8 +42,8 @@
 
 | Task | Status |
 |------|--------|
-| Supplier scorecard with risk alerts | ⬜ |
-| Drill-down by supplier / region / carrier | ⬜ |
+| Credit risk scorecard with default-rate alerts | ⬜ |
+| Drill-down by grade / intent / income band | ⬜ |
 | Connect to exported model output CSV | ⬜ |
 
 ---
@@ -50,9 +52,9 @@
 
 | Task | File | Status |
 |------|------|--------|
-| 3-class input form → predict Low/Medium/High + probabilities | `app/app.py` | ✅ |
+| Applicant input form → P(default) + risk tier + recommendation | `app/app.py` | ✅ |
 | Load saved XGBoost model (`primary_model.pkl`) | `app/app.py` | ✅ |
-| Deploy / run locally end-to-end | — | ✅ smoke-tested locally |
+| Run locally end-to-end | — | ✅ prediction logic smoke-tested |
 
 ---
 
@@ -60,13 +62,13 @@
 
 | Section | Status |
 |---------|--------|
-| Structure / skeleton | ✅ (166 lines) |
+| Structure / skeleton | 🔄 needs re-framing for credit domain |
 | Introduction & research questions | ⬜ |
-| Literature review & theoretical frameworks | ⬜ |
-| Data description & leakage analysis | ⬜ |
-| Methodology (pipeline, models) | ⬜ |
-| Results & evaluation tables | ⬜ |
-| Discussion & limitations | ⬜ |
+| Literature review & frameworks | ⬜ (credit-risk literature) |
+| Data description & leakage discussion (grade/int_rate stance) | ⬜ |
+| Methodology (pipeline, models, threshold) | ⬜ |
+| Results & evaluation tables | ⬜ baseline + weighted |
+| Discussion & limitations (imbalance trade-off, drift) | ⬜ |
 | Conclusion | ⬜ |
 
 ---
@@ -76,7 +78,8 @@
 | Task | Status |
 |------|--------|
 | Template in place | ✅ |
-| 15–20 core prompts logged | 🔄 in progress |
+| Dataset-pivot VERIFICATION entry logged | ✅ |
+| 15–20 core prompts logged | 🔄 |
 | ≥3 hallucination checks documented | ⬜ |
 | Human Delta filled in by students | ⬜ ongoing |
 | Entries exported to `.xlsx` before submission | ⬜ |
@@ -85,11 +88,12 @@
 
 ## Submission Checklist
 
-- [x] All 6 pipeline scripts run clean end-to-end
+- [x] All 6 pipeline scripts run clean end-to-end (credit dataset)
 - [x] `sql/analysis.sql` matches output from `02_sql_analysis.py`
-- [x] 4 model comparison table with PR-AUC as primary metric (`Data/filtered/model_outputs/model_comparison.csv`)
-- [x] SHAP summary plot saved (`Data/filtered/model_outputs/shap_summary.png`)
-- [ ] Power BI `.pbix` file committed
+- [x] 4-model comparison with PR-AUC primary (`model_comparison.csv`)
+- [x] Baseline vs imbalance-weighted table (`model_comparison_all_experiments.csv`)
+- [x] SHAP summary saved (`shap_summary.png`)
+- [ ] Power BI `.pbix` committed
 - [x] Streamlit app runs: `streamlit run app/app.py`
 - [ ] Report PDF compiled from `main.tex` (10–12 pages)
 - [ ] AI Audit Log `.xlsx` complete (15–20 entries, ≥3 hallucination logs)

@@ -1,0 +1,8 @@
+,corr_with_loan_status
+loan_percent_income,0.37958006788025184
+loan_int_rate,0.33581219483648883
+person_income,-0.16926248840758312
+loan_amnt,0.10560086629156928
+person_emp_length,-0.08631337703900539
+person_age,-0.021774084840569828
+cb_person_cred_hist_length,-0.01644058827271155

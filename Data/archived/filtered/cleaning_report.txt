@@ -1,0 +1,16 @@
+DAP391m ingestion and cleaning report
+========================================
+Input: Data/supply_chain_risk_dataset.csv
+Output: Data/filtered/clean_data.csv
+Rows: 2478
+Columns: 17
+
+Risk label counts:
+risk_label
+Low        482
+Medium     433
+High      1563
+
+Leakage warning:
+`risk_probability` and `port_delay_days` are preserved here for EDA,
+but must be dropped before model fitting.

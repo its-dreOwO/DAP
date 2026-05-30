@@ -18,12 +18,7 @@ RAW_DIR = PROJECT_ROOT / "Data"
 CLEAN_DIR = PROJECT_ROOT / "Data" / "filtered"
 
 DATASETS = {
-    "customer": ("customer.csv", "customer_clean.csv"),
-    "shipment": ("shipment.csv", "shipment_clean.csv"),
-    "logistics_performance": (
-        "logistics_performance.csv",
-        "logistics_performance_clean.csv",
-    ),
+    "credit_risk": ("credit_risk_dataset.csv", "clean_data.csv"),
 }
 
 st.set_page_config(page_title="DAP391m — Data Quality Dashboard", layout="wide")

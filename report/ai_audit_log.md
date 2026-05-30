@@ -12,11 +12,11 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 | Component | Logged | Required |
 |---|---|---|
-| Business & Problem Understanding | 0 | ≥ 2 |
-| Data Understanding & Preparation | 1 | ≥ 3 |
+| Business & Problem Understanding | 1 | ≥ 2 |
+| Data Understanding & Preparation | 2 | ≥ 3 |
 | EDA | 1 | ≥ 2 |
-| Modeling & Regression Analysis | 1 | ≥ 4 |
-| Evaluation, Visualization & Reporting | 1 | ≥ 3 |
+| Modeling & Regression Analysis | 2 | ≥ 4 |
+| Evaluation, Visualization & Reporting | 2 | ≥ 3 |
 
 ---
 
@@ -50,6 +50,36 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 ---
 
+## Entry 003
+
+| Field | Content |
+|---|---|
+| **Entry #** | 003 |
+| **Prompt Type** | DECISION / PROBLEM-SOLVING |
+| **Stage/Component** | Modeling & Regression Analysis; Evaluation, Visualization & Reporting |
+| **Problem/Context** | The first XGBoost result had the best baseline Macro PR-AUC but weak Low/Medium class recognition. The team needed to know whether recalibration or imbalance handling should replace the official report model. |
+| **Prompt to AI** | "can you recalibrate / try to improve it"; then "what do you think the best solution for this would be"; then "keep both" |
+| **AI Response (Summary)** | AI tested an imbalance-weighted modeling variant, compared it against the baseline PR-AUC run, and updated `05_modeling.py` to preserve both outputs. Baseline XGBoost remains the official deployment/report model because it is best by Macro PR-AUC (0.3571). The imbalance-weighted experiment is saved separately because it improves XGBoost macro F1 (0.3587 vs. 0.3102) but lowers XGBoost Macro PR-AUC (0.3473) and accuracy. |
+| **Human Delta & Reflection** | *(To complete — answer all 4 questions):* [Critical Thinking: decide whether the group agrees that Macro PR-AUC should remain the primary metric.] [Contextualization: explain whether supplier-risk decisions value overall PR-AUC or minority-class recall/F1 more.] [Creative Synthesis: describe how the team will present both variants in the report.] [Decision Ownership: state the final model-framing decision made by the group.] |
+| **Evidence** | *(To complete):* [Add screenshots or snippets from `Data/filtered/model_outputs/model_comparison.csv`, `Data/filtered/model_outputs/imbalance_weighted/model_comparison.csv`, and `Data/filtered/model_outputs/model_comparison_all_experiments.csv`. Include `PROBLEMS.md` P7 discussion outcome once resolved.] |
+
+---
+
+## Entry 004
+
+| Field | Content |
+|---|---|
+| **Entry #** | 004 |
+| **Prompt Type** | VERIFICATION / DECISION |
+| **Stage/Component** | Business & Problem Understanding; Data Understanding & Preparation |
+| **Problem/Context** | XGBoost appeared to classify almost everything as the majority class. The student asked whether the dataset (63% majority) was the problem and whether to find a new one. Needed to verify the true cause before committing to a fix. |
+| **Prompt to AI** | "looking that dataset the high is taking about 63% explaining why XGBOOST is classifying everyone is high risk should we find another dataset?"; then "can you use the kaggle skills and see what feature each dataset has and is it really suitable" |
+| **AI Response (Summary)** | AI checked the actual predictions/metrics and found the real cause was not imbalance but **near-zero signal**: all 4 models scored ROC-AUC ≈ 0.52 because the target `risk_label` was synthetically derived from the dropped leakage column `port_delay_days`. After supervisor approval to switch datasets, AI downloaded both supervisor-suggested Kaggle datasets and verified them: `uciml/german-credit` has **no target column** (10 feature columns only) → rejected; `laotse/credit-risk-dataset` (32,581 rows, target `loan_status`, 78/22 imbalance) showed genuine signal (quick RandomForest ROC-AUC ≈ 0.93) → adopted. The full pipeline (`01`–`06`), SQL, and Streamlit app were rebuilt for binary credit-default classification; final XGBoost PR-AUC = 0.911, ROC-AUC = 0.952. |
+| **Human Delta & Reflection** | *(To complete — answer all 4 questions):* [Critical Thinking: explain why ROC-AUC ≈ 0.52 points to a signal problem rather than an imbalance problem.] [Contextualization: distinguish leakage `port_delay_days` (outcome-derived) from `loan_grade`/`loan_int_rate` (decision-time inputs).] [Creative Synthesis: describe how the team re-framed the project from supply-chain to credit risk.] [Decision Ownership: record the supervisor's confirmation and the group's final dataset choice.] |
+| **Evidence** | *(To complete):* [Old `predictions_test.csv` showing 456/496 predicted High and `model_comparison.csv` with ROC-AUC ≈ 0.52; Kaggle inspection output showing German Credit has no target column and Credit Risk RF ROC-AUC ≈ 0.93; new `Data/filtered/model_outputs/model_comparison.csv` (XGBoost PR-AUC 0.911). This is a candidate hallucination-check: the supervisor's suggested dataset was empirically unusable.] |
+
+---
+
 <!-- Add new entries below as work progresses. Use the template:
 
 ## Entry 00X
@@ -79,4 +109,4 @@ Suggestions in `[brackets]` indicate what to write — do not copy verbatim.
 
 ---
 
-*Last updated: 2026-05-27 — Entry 002 added (pipeline reconciliation and verification); scripts 01-06 run end-to-end*
+*Last updated: 2026-05-29 — Entry 004 added (dataset pivot to credit-default risk: signal verification + Kaggle dataset suitability check)*

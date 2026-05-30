@@ -3,259 +3,160 @@
   "engineered_features": "Data/filtered/engineered_features.csv",
   "random_state": 42,
   "test_size": 0.2,
+  "target": "loan_status",
   "class_labels": [
-    "Low",
-    "Medium",
-    "High"
+    "Non-default",
+    "Default"
   ],
-  "label_to_int": {
-    "Low": 0,
-    "Medium": 1,
-    "High": 2
-  },
-  "n_train": 1982,
-  "n_test": 496,
+  "n_train": 25927,
+  "n_test": 6482,
   "numeric_cols": [
-    "temperature_C",
-    "vibration_level",
-    "machine_runtime_hours",
-    "inventory_level_units",
-    "pending_orders",
-    "supplier_lead_time_days",
-    "supplier_quality_score",
-    "supplier_reliability_index",
-    "fuel_price_index",
-    "market_demand_index",
-    "weather_disruption_score",
-    "order_month",
-    "order_weekday",
-    "order_hour",
-    "supplier_avg_lead",
-    "supplier_std_lead",
-    "supplier_risk_score",
-    "external_risk_score"
+    "person_age",
+    "person_income",
+    "person_emp_length",
+    "loan_amnt",
+    "loan_int_rate",
+    "loan_percent_income",
+    "cb_person_cred_hist_length",
+    "high_debt_burden",
+    "credit_hist_ratio",
+    "interest_to_income"
   ],
   "categorical_cols": [
-    "supplier_id"
+    "person_home_ownership",
+    "loan_intent",
+    "loan_grade",
+    "cb_person_default_on_file",
+    "income_bracket",
+    "age_bracket",
+    "loan_amount_bracket"
   ],
   "feature_columns_tree": [
-    "num__temperature_C",
-    "num__vibration_level",
-    "num__machine_runtime_hours",
-    "num__inventory_level_units",
-    "num__pending_orders",
-    "num__supplier_lead_time_days",
-    "num__supplier_quality_score",
-    "num__supplier_reliability_index",
-    "num__fuel_price_index",
-    "num__market_demand_index",
-    "num__weather_disruption_score",
-    "num__order_month",
-    "num__order_weekday",
-    "num__order_hour",
-    "num__supplier_avg_lead",
-    "num__supplier_std_lead",
-    "num__supplier_risk_score",
-    "num__external_risk_score",
-    "cat__supplier_id_SUP_100",
-    "cat__supplier_id_SUP_101",
-    "cat__supplier_id_SUP_102",
-    "cat__supplier_id_SUP_103",
-    "cat__supplier_id_SUP_104",
-    "cat__supplier_id_SUP_105",
-    "cat__supplier_id_SUP_106",
-    "cat__supplier_id_SUP_107",
-    "cat__supplier_id_SUP_108",
-    "cat__supplier_id_SUP_109",
-    "cat__supplier_id_SUP_110",
-    "cat__supplier_id_SUP_111",
-    "cat__supplier_id_SUP_112",
-    "cat__supplier_id_SUP_113",
-    "cat__supplier_id_SUP_114",
-    "cat__supplier_id_SUP_115",
-    "cat__supplier_id_SUP_116",
-    "cat__supplier_id_SUP_117",
-    "cat__supplier_id_SUP_118",
-    "cat__supplier_id_SUP_119",
-    "cat__supplier_id_SUP_120",
-    "cat__supplier_id_SUP_121",
-    "cat__supplier_id_SUP_122",
-    "cat__supplier_id_SUP_123",
-    "cat__supplier_id_SUP_124",
-    "cat__supplier_id_SUP_125",
-    "cat__supplier_id_SUP_126",
-    "cat__supplier_id_SUP_127",
-    "cat__supplier_id_SUP_128",
-    "cat__supplier_id_SUP_129",
-    "cat__supplier_id_SUP_130",
-    "cat__supplier_id_SUP_131",
-    "cat__supplier_id_SUP_132",
-    "cat__supplier_id_SUP_133",
-    "cat__supplier_id_SUP_134",
-    "cat__supplier_id_SUP_135",
-    "cat__supplier_id_SUP_136",
-    "cat__supplier_id_SUP_137",
-    "cat__supplier_id_SUP_138",
-    "cat__supplier_id_SUP_139",
-    "cat__supplier_id_SUP_140",
-    "cat__supplier_id_SUP_141",
-    "cat__supplier_id_SUP_142",
-    "cat__supplier_id_SUP_143",
-    "cat__supplier_id_SUP_144",
-    "cat__supplier_id_SUP_145",
-    "cat__supplier_id_SUP_146",
-    "cat__supplier_id_SUP_147",
-    "cat__supplier_id_SUP_148",
-    "cat__supplier_id_SUP_149",
-    "cat__supplier_id_SUP_150"
+    "num__person_age",
+    "num__person_income",
+    "num__person_emp_length",
+    "num__loan_amnt",
+    "num__loan_int_rate",
+    "num__loan_percent_income",
+    "num__cb_person_cred_hist_length",
+    "num__high_debt_burden",
+    "num__credit_hist_ratio",
+    "num__interest_to_income",
+    "cat__person_home_ownership_MORTGAGE",
+    "cat__person_home_ownership_OTHER",
+    "cat__person_home_ownership_OWN",
+    "cat__person_home_ownership_RENT",
+    "cat__loan_intent_DEBTCONSOLIDATION",
+    "cat__loan_intent_EDUCATION",
+    "cat__loan_intent_HOMEIMPROVEMENT",
+    "cat__loan_intent_MEDICAL",
+    "cat__loan_intent_PERSONAL",
+    "cat__loan_intent_VENTURE",
+    "cat__loan_grade_A",
+    "cat__loan_grade_B",
+    "cat__loan_grade_C",
+    "cat__loan_grade_D",
+    "cat__loan_grade_E",
+    "cat__loan_grade_F",
+    "cat__loan_grade_G",
+    "cat__cb_person_default_on_file_N",
+    "cat__cb_person_default_on_file_Y",
+    "cat__income_bracket_100k+",
+    "cat__income_bracket_30k-60k",
+    "cat__income_bracket_60k-100k",
+    "cat__income_bracket_<30k",
+    "cat__age_bracket_26-35",
+    "cat__age_bracket_36-50",
+    "cat__age_bracket_50+",
+    "cat__age_bracket_<=25",
+    "cat__loan_amount_bracket_10k-20k",
+    "cat__loan_amount_bracket_20k+",
+    "cat__loan_amount_bracket_5k-10k",
+    "cat__loan_amount_bracket_<5k"
   ],
   "feature_columns_scaled": [
-    "num__temperature_C",
-    "num__vibration_level",
-    "num__machine_runtime_hours",
-    "num__inventory_level_units",
-    "num__pending_orders",
-    "num__supplier_lead_time_days",
-    "num__supplier_quality_score",
-    "num__supplier_reliability_index",
-    "num__fuel_price_index",
-    "num__market_demand_index",
-    "num__weather_disruption_score",
-    "num__order_month",
-    "num__order_weekday",
-    "num__order_hour",
-    "num__supplier_avg_lead",
-    "num__supplier_std_lead",
-    "num__supplier_risk_score",
-    "num__external_risk_score",
-    "cat__supplier_id_SUP_100",
-    "cat__supplier_id_SUP_101",
-    "cat__supplier_id_SUP_102",
-    "cat__supplier_id_SUP_103",
-    "cat__supplier_id_SUP_104",
-    "cat__supplier_id_SUP_105",
-    "cat__supplier_id_SUP_106",
-    "cat__supplier_id_SUP_107",
-    "cat__supplier_id_SUP_108",
-    "cat__supplier_id_SUP_109",
-    "cat__supplier_id_SUP_110",
-    "cat__supplier_id_SUP_111",
-    "cat__supplier_id_SUP_112",
-    "cat__supplier_id_SUP_113",
-    "cat__supplier_id_SUP_114",
-    "cat__supplier_id_SUP_115",
-    "cat__supplier_id_SUP_116",
-    "cat__supplier_id_SUP_117",
-    "cat__supplier_id_SUP_118",
-    "cat__supplier_id_SUP_119",
-    "cat__supplier_id_SUP_120",
-    "cat__supplier_id_SUP_121",
-    "cat__supplier_id_SUP_122",
-    "cat__supplier_id_SUP_123",
-    "cat__supplier_id_SUP_124",
-    "cat__supplier_id_SUP_125",
-    "cat__supplier_id_SUP_126",
-    "cat__supplier_id_SUP_127",
-    "cat__supplier_id_SUP_128",
-    "cat__supplier_id_SUP_129",
-    "cat__supplier_id_SUP_130",
-    "cat__supplier_id_SUP_131",
-    "cat__supplier_id_SUP_132",
-    "cat__supplier_id_SUP_133",
-    "cat__supplier_id_SUP_134",
-    "cat__supplier_id_SUP_135",
-    "cat__supplier_id_SUP_136",
-    "cat__supplier_id_SUP_137",
-    "cat__supplier_id_SUP_138",
-    "cat__supplier_id_SUP_139",
-    "cat__supplier_id_SUP_140",
-    "cat__supplier_id_SUP_141",
-    "cat__supplier_id_SUP_142",
-    "cat__supplier_id_SUP_143",
-    "cat__supplier_id_SUP_144",
-    "cat__supplier_id_SUP_145",
-    "cat__supplier_id_SUP_146",
-    "cat__supplier_id_SUP_147",
-    "cat__supplier_id_SUP_148",
-    "cat__supplier_id_SUP_149",
-    "cat__supplier_id_SUP_150"
-  ],
-  "leakage_columns_dropped": [
-    "risk_probability",
-    "port_delay_days"
+    "num__person_age",
+    "num__person_income",
+    "num__person_emp_length",
+    "num__loan_amnt",
+    "num__loan_int_rate",
+    "num__loan_percent_income",
+    "num__cb_person_cred_hist_length",
+    "num__high_debt_burden",
+    "num__credit_hist_ratio",
+    "num__interest_to_income",
+    "cat__person_home_ownership_MORTGAGE",
+    "cat__person_home_ownership_OTHER",
+    "cat__person_home_ownership_OWN",
+    "cat__person_home_ownership_RENT",
+    "cat__loan_intent_DEBTCONSOLIDATION",
+    "cat__loan_intent_EDUCATION",
+    "cat__loan_intent_HOMEIMPROVEMENT",
+    "cat__loan_intent_MEDICAL",
+    "cat__loan_intent_PERSONAL",
+    "cat__loan_intent_VENTURE",
+    "cat__loan_grade_A",
+    "cat__loan_grade_B",
+    "cat__loan_grade_C",
+    "cat__loan_grade_D",
+    "cat__loan_grade_E",
+    "cat__loan_grade_F",
+    "cat__loan_grade_G",
+    "cat__cb_person_default_on_file_N",
+    "cat__cb_person_default_on_file_Y",
+    "cat__income_bracket_100k+",
+    "cat__income_bracket_30k-60k",
+    "cat__income_bracket_60k-100k",
+    "cat__income_bracket_<30k",
+    "cat__age_bracket_26-35",
+    "cat__age_bracket_36-50",
+    "cat__age_bracket_50+",
+    "cat__age_bracket_<=25",
+    "cat__loan_amount_bracket_10k-20k",
+    "cat__loan_amount_bracket_20k+",
+    "cat__loan_amount_bracket_5k-10k",
+    "cat__loan_amount_bracket_<5k"
   ],
   "iqr_bounds": {
-    "temperature_C": {
-      "lower": 56.6379018176842,
-      "upper": 83.66175144889601
+    "person_age": {
+      "lower": 12.5,
+      "upper": 40.5
     },
-    "vibration_level": {
-      "lower": -0.6419512830148513,
-      "upper": 80.73147609696944
+    "person_income": {
+      "lower": -21280.0,
+      "upper": 139168.0
     },
-    "machine_runtime_hours": {
-      "lower": -25.605740110664257,
-      "upper": 272.97520268397136
+    "person_emp_length": {
+      "lower": -5.5,
+      "upper": 14.5
     },
-    "inventory_level_units": {
-      "lower": -296.625,
-      "upper": 2070.375
+    "loan_amnt": {
+      "lower": -5706.25,
+      "upper": 22843.75
     },
-    "pending_orders": {
-      "lower": -141.0,
-      "upper": 841.0
+    "loan_int_rate": {
+      "lower": -0.47000000000000064,
+      "upper": 21.85
     },
-    "supplier_lead_time_days": {
-      "lower": -0.6464097541985039,
-      "upper": 9.478590912707933
+    "loan_percent_income": {
+      "lower": -0.12000000000000002,
+      "upper": 0.44000000000000006
     },
-    "supplier_quality_score": {
-      "lower": 57.06361881047744,
-      "upper": 108.0498348237085
+    "cb_person_cred_hist_length": {
+      "lower": -4.5,
+      "upper": 15.5
     },
-    "supplier_reliability_index": {
-      "lower": 0.5529032539072508,
-      "upper": 1.1480730018279979
+    "high_debt_burden": {
+      "lower": 0.0,
+      "upper": 0.0
     },
-    "fuel_price_index": {
-      "lower": 0.6180651504251229,
-      "upper": 1.7842947038780859
+    "credit_hist_ratio": {
+      "lower": -0.07644999999999996,
+      "upper": 0.46074999999999994
     },
-    "market_demand_index": {
-      "lower": 0.10057502887947772,
-      "upper": 1.3104634881817476
-    },
-    "weather_disruption_score": {
-      "lower": -5.206866356595349,
-      "upper": 15.161935964094987
-    },
-    "order_month": {
-      "lower": 1.0,
-      "upper": 9.0
-    },
-    "order_weekday": {
-      "lower": -5.0,
-      "upper": 11.0
-    },
-    "order_hour": {
-      "lower": -10.5,
-      "upper": 33.5
-    },
-    "supplier_avg_lead": {
-      "lower": 3.678582896934127,
-      "upper": 5.236687793744402
-    },
-    "supplier_std_lead": {
-      "lower": 0.9591835124026638,
-      "upper": 1.8473826609583988
-    },
-    "supplier_risk_score": {
-      "lower": 0.26514412203819004,
-      "upper": 0.4787144763200408
-    },
-    "external_risk_score": {
-      "lower": -0.041822373105955324,
-      "upper": 1.0439230317963464
+    "interest_to_income": {
+      "lower": -0.0178,
+      "upper": 0.0526
     }
   }
 }
