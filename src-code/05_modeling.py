@@ -171,7 +171,8 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
         out["cb_person_cred_hist_length"] / out["person_age"]
     ).round(4)
     out["interest_to_income"] = (
-        ((out["loan_int_rate"] / 100.0) * out["loan_amnt"]) / out["person_income"]
+        ((out["loan_int_rate"] / 100.0) * out["loan_amnt"])
+        / out["person_income"].clip(lower=1)
     ).round(4)
     out["income_bracket"] = pd.cut(
         out["person_income"],
