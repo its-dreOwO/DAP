@@ -87,7 +87,7 @@ SELECT
     ROUND(100.0 * m.mode_late   / t.total_late,  1)                AS late_share_pct,
     ROUND(
         (1.0 * m.mode_late / NULLIF(m.mode_volume, 0))
-      / (1.0 * t.total_late / NULLIF(t.grand_total, 0)),
+      / NULLIF(1.0 * t.total_late / NULLIF(t.grand_total, 0), 0),
         2
     )                                                              AS penetration_index
 FROM mode_stats m, totals t
