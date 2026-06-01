@@ -1,0 +1,26 @@
+DataCo leakage candidate report
+========================================
+
+KNOWN post-outcome columns (drop if target is Late_delivery_risk):
+  - Days for shipping (real)
+  - Delivery Status
+  - shipping date (DateOrders)
+  - Order Status
+  - Benefit per order
+  - Order Profit Per Order
+  - Order Item Profit Ratio
+
+Heuristic name-based candidates (review; may overlap above):
+
+Empirical cross-checks:
+  - Late_delivery_risk == (Delivery Status == 'Late delivery'): 100.00% agreement
+  - Late_delivery_risk == (real days > scheduled days): 97.55% agreement (where comparable)
+  - Unique scheduled-day values per shipping mode: {'First Class': 1, 'Same Day': 1, 'Second Class': 1, 'Standard Class': 1} (1 per mode => perfect collinearity)
+
+PII columns (drop for privacy):
+  - Customer Email
+  - Customer Password
+  - Customer Fname
+  - Customer Lname
+  - Customer Street
+  - Customer Zipcode

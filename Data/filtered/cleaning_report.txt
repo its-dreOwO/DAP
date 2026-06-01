@@ -1,7 +1,7 @@
 DAP391m ingestion and cleaning report
 ========================================
-Input:  Data/dataco_raw/DataCoSupplyChainDataset.csv
-Output: Data/filtered/clean_data.csv
+Input:  Data\dataco_raw\DataCoSupplyChainDataset.csv
+Output: Data\filtered\clean_data.csv
 Input rows x cols:  180519 x 53
 Output rows x cols: 180519 x 29
 Impossible-value rows removed: 0

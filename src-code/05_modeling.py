@@ -1,19 +1,18 @@
 """
-DAP391m Project 8 — Binary Credit-Default Risk Modeling
+DAP391m Project 8 — Late-Delivery Risk Modeling (DataCo)
 ========================================================
 
-Trains four classifiers on credit_risk_dataset.csv (target: loan_status,
-1 = default), evaluates binary metrics (PR-AUC primary), tunes the decision
-threshold, and persists artifacts for reporting, explainability, and Streamlit
-deployment (XGBoost primary).
+Trains four binary classifiers on the DataCo Smart Supply Chain dataset
+(target: Late_delivery_risk, 1 = late), evaluates metrics (PR-AUC primary),
+persists artifacts for reporting, explainability, and Streamlit deployment
+(XGBoost primary).
 
-The main output directory keeps the default-threshold baseline. An
-imbalance-weighted experiment (class weighting / scale_pos_weight) is saved
-separately for report discussion.
+Uses GroupShuffleSplit on Order Id so line-items from the same order never
+leak across train and test.
 
 Run:
-    .venv/bin/python3 src-code/05_modeling.py
-    (reads Data/filtered/clean_data.csv; run 01_ingestion_cleaning.py first)
+    python src-code/05_modeling.py
+    (reads Data/filtered/clean_data.csv if present, else raw DataCo CSV)
 """
 
 from __future__ import annotations
@@ -46,12 +45,11 @@ from sklearn.metrics import (  # noqa: E402
     classification_report,
     confusion_matrix,
     f1_score,
-    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split  # noqa: E402
+from sklearn.model_selection import GroupShuffleSplit  # noqa: E402
 from sklearn.pipeline import Pipeline  # noqa: E402
 from sklearn.preprocessing import OneHotEncoder, StandardScaler  # noqa: E402
 from sklearn.tree import DecisionTreeClassifier  # noqa: E402
@@ -75,18 +73,50 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_CSV = PROJECT_ROOT / "Data" / "filtered" / "clean_data.csv"
+RAW_CSV = PROJECT_ROOT / "Data" / "dataco_raw" / "DataCoSupplyChainDataset.csv"
+CLEAN_CSV = PROJECT_ROOT / "Data" / "filtered" / "clean_data.csv"
 OUTPUT_DIR = PROJECT_ROOT / "Data" / "filtered" / "model_outputs"
 
-TARGET_COL = "loan_status"
-CLASS_LABELS = ["Non-default", "Default"]  # index == class int (0, 1)
+TARGET_COL = "Late_delivery_risk"
+GROUP_KEY = "Order Id"
+SHIPPING_MODE_COL = "Shipping Mode"
+DATE_COL = "order date (DateOrders)"
+SOURCE_DATASET_NAME = "DataCoSupplyChainDataset.csv"
+
+CLASS_LABELS = ["On-time", "Late"]  # index == class int (0, 1)
 POSITIVE_CLASS = 1
+
+LEAKAGE_COLUMNS = [
+    "Days for shipping (real)",
+    "Delivery Status",
+    "shipping date (DateOrders)",
+    "Order Status",
+    "Benefit per order",
+    "Order Profit Per Order",
+    "Order Item Profit Ratio",
+]
+
+PII_COLUMNS = [
+    "Customer Email",
+    "Customer Fname",
+    "Customer Lname",
+    "Customer Password",
+    "Customer Street",
+    "Customer Zipcode",
+    "Customer Id",
+    "Order Customer Id",
+    "Latitude",
+    "Longitude",
+    "Product Image",
+    "Product Description",
+]
+
+NON_FEATURE_COLUMNS = [GROUP_KEY, "Order Item Id"]
 
 MODEL_SPECS: list[dict[str, Any]] = [
     {
         "key": "logistic_regression",
         "display": "Logistic Regression",
-        "role": "baseline",
         "pkl": "logistic_model.pkl",
         "scaled": True,
         "report": "classification_report_logistic_regression.txt",
@@ -95,7 +125,6 @@ MODEL_SPECS: list[dict[str, Any]] = [
     {
         "key": "decision_tree",
         "display": "Decision Tree",
-        "role": "simple baseline",
         "pkl": "decision_tree_model.pkl",
         "scaled": False,
         "report": "classification_report_decision_tree.txt",
@@ -104,7 +133,6 @@ MODEL_SPECS: list[dict[str, Any]] = [
     {
         "key": "random_forest",
         "display": "Random Forest",
-        "role": "ensemble comparison",
         "pkl": "random_forest_model.pkl",
         "scaled": False,
         "report": "classification_report_random_forest.txt",
@@ -113,7 +141,6 @@ MODEL_SPECS: list[dict[str, Any]] = [
     {
         "key": "xgboost",
         "display": "XGBoost",
-        "role": "primary model",
         "pkl": "xgb_model.pkl",
         "scaled": False,
         "report": "classification_report_xgboost.txt",
@@ -122,74 +149,82 @@ MODEL_SPECS: list[dict[str, Any]] = [
     },
 ]
 
-EXPERIMENTS: list[dict[str, Any]] = [
-    {
-        "key": "baseline",
-        "display": "Baseline PR-AUC",
-        "output_dir": OUTPUT_DIR,
-        "weighted": False,
-    },
-    {
-        "key": "imbalance_weighted",
-        "display": "Imbalance-weighted",
-        "output_dir": OUTPUT_DIR / "imbalance_weighted",
-        "weighted": True,
-    },
-]
-
 
 # ── data loading & feature prep ─────────────────────────────────────────────
-def load_and_prepare_data() -> tuple[pd.DataFrame, pd.Series]:
-    if not DATA_CSV.exists():
+def load_dataco_dataframe() -> pd.DataFrame:
+    if CLEAN_CSV.exists():
+        return pd.read_csv(CLEAN_CSV)
+    if not RAW_CSV.exists():
         raise FileNotFoundError(
-            f"Dataset not found: {DATA_CSV}. Run 01_ingestion_cleaning.py first."
+            f"Dataset not found. Expected {CLEAN_CSV} (run 01 first) or {RAW_CSV}."
         )
+    return pd.read_csv(RAW_CSV, encoding="latin-1")
 
-    df = pd.read_csv(DATA_CSV)
-    if TARGET_COL not in df.columns:
-        raise ValueError(f"Target column '{TARGET_COL}' not found in {DATA_CSV.name}")
 
-    print(f"Dataset shape: {df.shape}")
-    counts = df[TARGET_COL].value_counts().sort_index()
-    print("Class distribution (loan_status):")
-    print(counts.to_string())
-    print(f"Default rate: {100.0 * counts.get(1, 0) / len(df):.1f}%")
-    print()
-
-    df = add_engineered_features(df)
-    y = df[TARGET_COL].astype(int)
-    X = df.drop(columns=[TARGET_COL])
-    return X, y
+def drop_leakage_and_pii(df: pd.DataFrame) -> pd.DataFrame:
+    to_drop = [
+        c for c in LEAKAGE_COLUMNS + PII_COLUMNS if c in df.columns and c != TARGET_COL
+    ]
+    if not to_drop:
+        return df
+    return df.drop(columns=to_drop)
 
 
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Decision-time engineered features. Kept in sync with
-    src-code/04_feature_engineering.py and app/app.py."""
     out = df.copy()
-    out["high_debt_burden"] = (out["loan_percent_income"] > 0.30).astype(int)
-    out["credit_hist_ratio"] = (
-        out["cb_person_cred_hist_length"] / out["person_age"]
-    ).round(4)
-    out["interest_to_income"] = (
-        ((out["loan_int_rate"] / 100.0) * out["loan_amnt"])
-        / out["person_income"].clip(lower=1)
-    ).round(4)
-    out["income_bracket"] = pd.cut(
-        out["person_income"],
-        bins=[-1, 30000, 60000, 100000, float("inf")],
-        labels=["<30k", "30k-60k", "60k-100k", "100k+"],
-    ).astype(str)
-    out["age_bracket"] = pd.cut(
-        out["person_age"],
-        bins=[-1, 25, 35, 50, float("inf")],
-        labels=["<=25", "26-35", "36-50", "50+"],
-    ).astype(str)
-    out["loan_amount_bracket"] = pd.cut(
-        out["loan_amnt"],
-        bins=[-1, 5000, 10000, 20000, float("inf")],
-        labels=["<5k", "5k-10k", "10k-20k", "20k+"],
-    ).astype(str)
+    if DATE_COL in out.columns:
+        dt = pd.to_datetime(out[DATE_COL], errors="coerce")
+        out["order_month"] = dt.dt.month
+        out["order_day_of_week"] = dt.dt.dayofweek
+        out["order_hour"] = dt.dt.hour
+        out = out.drop(columns=[DATE_COL])
     return out
+
+
+def load_and_prepare_data() -> tuple[
+    pd.DataFrame,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.DataFrame,
+]:
+    df = load_dataco_dataframe()
+    df = drop_leakage_and_pii(df)
+
+    if TARGET_COL not in df.columns:
+        raise ValueError(f"Target column '{TARGET_COL}' not found.")
+    if GROUP_KEY not in df.columns:
+        raise ValueError(f"Group column '{GROUP_KEY}' not found.")
+
+    print(f"Dataset shape: {df.shape}")
+    counts = df[TARGET_COL].value_counts().sort_index()
+    print("Target distribution (Late_delivery_risk):")
+    print(counts.to_string())
+    late_pct = 100.0 * counts.get(1, 0) / len(df)
+    print(f"Late-delivery rate: {late_pct:.1f}%")
+    print(f"Unique orders: {df[GROUP_KEY].nunique():,}")
+    print()
+
+    shipping_df = (
+        df[[SHIPPING_MODE_COL, TARGET_COL]].copy()
+        if SHIPPING_MODE_COL in df.columns
+        else None
+    )
+
+    df = add_engineered_features(df)
+    y = df[TARGET_COL].astype(int)
+    groups = df[GROUP_KEY]
+    order_ids = df[GROUP_KEY]
+    shipping_modes = (
+        df[SHIPPING_MODE_COL]
+        if SHIPPING_MODE_COL in df.columns
+        else pd.Series(dtype=object)
+    )
+
+    feature_drop = [TARGET_COL] + [c for c in NON_FEATURE_COLUMNS if c in df.columns]
+    X = df.drop(columns=feature_drop)
+    return X, y, groups, order_ids, shipping_modes, shipping_df
 
 
 def split_features(X: pd.DataFrame) -> tuple[list[str], list[str]]:
@@ -198,6 +233,31 @@ def split_features(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     ).columns.tolist()
     num_cols = [c for c in X.columns if c not in cat_cols]
     return num_cols, cat_cols
+
+
+def group_train_test_split(
+    X: pd.DataFrame,
+    y: pd.Series,
+    groups: pd.Series,
+    order_ids: pd.Series,
+    shipping_modes: pd.Series,
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    np.ndarray,
+    np.ndarray,
+    pd.Series,
+    pd.Series,
+]:
+    gss = GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+    train_idx, test_idx = next(gss.split(X, y, groups=groups))
+    X_train = X.iloc[train_idx]
+    X_test = X.iloc[test_idx]
+    y_train = y.iloc[train_idx].to_numpy()
+    y_test = y.iloc[test_idx].to_numpy()
+    order_ids_test = order_ids.iloc[test_idx]
+    shipping_test = shipping_modes.iloc[test_idx]
+    return X_train, X_test, y_train, y_test, order_ids_test, shipping_test
 
 
 def build_preprocessor(
@@ -228,24 +288,18 @@ def build_preprocessor(
     return ColumnTransformer(transformers=transformers, remainder="drop")
 
 
-def build_estimator(key: str, weighted: bool, scale_pos_weight: float) -> Any:
+def build_estimator(key: str) -> Any:
     if key == "logistic_regression":
         return LogisticRegression(
-            class_weight="balanced" if weighted else None,
             max_iter=2000,
             random_state=RANDOM_STATE,
             solver="lbfgs",
         )
     if key == "decision_tree":
-        return DecisionTreeClassifier(
-            class_weight="balanced" if weighted else None,
-            max_depth=8,
-            random_state=RANDOM_STATE,
-        )
+        return DecisionTreeClassifier(max_depth=8, random_state=RANDOM_STATE)
     if key == "random_forest":
         return RandomForestClassifier(
             n_estimators=300,
-            class_weight="balanced" if weighted else None,
             random_state=RANDOM_STATE,
             n_jobs=-1,
         )
@@ -253,7 +307,6 @@ def build_estimator(key: str, weighted: bool, scale_pos_weight: float) -> Any:
         return XGBClassifier(
             objective="binary:logistic",
             eval_metric="aucpr",
-            scale_pos_weight=scale_pos_weight if weighted else 1.0,
             random_state=RANDOM_STATE,
             n_estimators=400,
             max_depth=5,
@@ -271,11 +324,9 @@ def make_model_pipeline(
     cat_cols: list[str],
     scale_numeric: bool,
     key: str,
-    weighted: bool,
-    scale_pos_weight: float,
 ) -> Pipeline:
     preprocessor = build_preprocessor(num_cols, cat_cols, scale_numeric)
-    estimator = build_estimator(key, weighted, scale_pos_weight)
+    estimator = build_estimator(key)
     return Pipeline([("preprocess", preprocessor), ("model", estimator)])
 
 
@@ -319,20 +370,6 @@ def evaluate_binary(
     return metrics
 
 
-def tune_threshold(y_true: np.ndarray, proba_pos: np.ndarray) -> tuple[float, float]:
-    """Pick the probability threshold that maximizes F1 for the positive class."""
-    precision, recall, thresholds = precision_recall_curve(y_true, proba_pos)
-    # precision/recall have len(thresholds)+1; align by dropping the last point.
-    f1 = np.divide(
-        2 * precision[:-1] * recall[:-1],
-        precision[:-1] + recall[:-1],
-        out=np.zeros_like(precision[:-1]),
-        where=(precision[:-1] + recall[:-1]) > 0,
-    )
-    best_idx = int(np.argmax(f1))
-    return float(thresholds[best_idx]), float(f1[best_idx])
-
-
 def select_best_model(comparison: pd.DataFrame) -> str:
     ranked = comparison.sort_values(
         by=["pr_auc", "recall", "f1"],
@@ -342,14 +379,90 @@ def select_best_model(comparison: pd.DataFrame) -> str:
     return str(ranked.iloc[0]["model"])
 
 
+def safe_auc(y_true: np.ndarray, scores: np.ndarray) -> tuple[float, float]:
+    if len(np.unique(y_true)) < 2:
+        return np.nan, np.nan
+    try:
+        return (
+            float(roc_auc_score(y_true, scores)),
+            float(average_precision_score(y_true, scores)),
+        )
+    except ValueError:
+        return np.nan, np.nan
+
+
+# ── shipping mode analysis ───────────────────────────────────────────────────
+def compute_late_rate_by_shipping_mode(
+    shipping_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    if shipping_df is None or SHIPPING_MODE_COL not in shipping_df.columns:
+        return pd.DataFrame(columns=[SHIPPING_MODE_COL, "count", "late_rate"])
+
+    summary = (
+        shipping_df.groupby(SHIPPING_MODE_COL, dropna=False)[TARGET_COL]
+        .agg(count="count", late_rate="mean")
+        .reset_index()
+        .sort_values("late_rate", ascending=False)
+    )
+    return summary
+
+
+def shipping_mode_base_rate_benchmark(
+    train_modes: pd.Series,
+    y_train: np.ndarray,
+    test_modes: pd.Series,
+    y_test: np.ndarray,
+) -> dict[str, float]:
+    train_df = pd.DataFrame(
+        {SHIPPING_MODE_COL: train_modes.values, TARGET_COL: y_train}
+    )
+    global_rate = float(y_train.mean())
+    mode_rates = train_df.groupby(SHIPPING_MODE_COL)[TARGET_COL].mean()
+    proba = test_modes.map(mode_rates).fillna(global_rate).to_numpy()
+    roc, pr = safe_auc(y_test, proba)
+    return {"roc_auc": roc, "pr_auc": pr}
+
+
+def xgboost_performance_by_shipping_mode(
+    shipping_test: pd.Series,
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+    proba_pos: np.ndarray,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    test_df = pd.DataFrame(
+        {
+            SHIPPING_MODE_COL: shipping_test.values,
+            "y_true": y_test,
+            "y_pred": y_pred,
+            "proba": proba_pos,
+        }
+    )
+    for mode, subset in test_df.groupby(SHIPPING_MODE_COL, dropna=False):
+        yt = subset["y_true"].to_numpy()
+        yp = subset["y_pred"].to_numpy()
+        proba = subset["proba"].to_numpy()
+        roc, pr = safe_auc(yt, proba)
+        rows.append(
+            {
+                SHIPPING_MODE_COL: mode,
+                "n_rows": len(subset),
+                "accuracy": accuracy_score(yt, yp),
+                "precision": precision_score(yt, yp, zero_division=0),
+                "recall": recall_score(yt, yp, zero_division=0),
+                "f1": f1_score(yt, yp, zero_division=0),
+                "roc_auc": roc,
+                "pr_auc": pr,
+            }
+        )
+    return pd.DataFrame(rows).sort_values(SHIPPING_MODE_COL)
+
+
 # ── persistence ──────────────────────────────────────────────────────────────
 def clear_output_dir(directory: Path) -> None:
+    if directory.exists():
+        shutil.rmtree(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    for path in directory.iterdir():
-        if path.is_file():
-            path.unlink()
-        elif path.is_dir():
-            shutil.rmtree(path)
 
 
 def save_confusion_matrix(cm: np.ndarray, path: Path) -> None:
@@ -370,32 +483,56 @@ def write_model_selection_summary(
     path: Path,
     comparison: pd.DataFrame,
     best_name: str,
-    experiment_name: str,
-    is_primary_output: bool,
-    tuned_threshold: float | None,
+    benchmark: dict[str, float],
+    n_train_rows: int,
+    n_test_rows: int,
+    n_train_orders: int,
+    n_test_orders: int,
 ) -> None:
     best_row = comparison.loc[comparison["model"] == best_name].iloc[0]
-    xgb_role = (
-        "official deployment + Streamlit model"
-        if is_primary_output
-        else "experimental comparison model"
-    )
     lines = [
-        "DAP391m — Model Selection Summary (Binary Credit-Default Classification)",
+        "DAP391m — Model Selection Summary (DataCo Late Delivery)",
         "=" * 72,
         "",
-        f"Experiment: {experiment_name}",
-        "Dataset: Data/credit_risk_dataset.csv (cleaned)",
-        "Target: loan_status (0 = Non-default, 1 = Default)",
-        "Problem: binary classification (positive class = Default)",
+        f"Final dataset: {SOURCE_DATASET_NAME} (DataCo Smart Supply Chain)",
+        f"Target: {TARGET_COL} (0 = on-time, 1 = late delivery)",
+        "Problem: binary late-delivery risk prediction for retail procurement",
+        "",
+        "Split: GroupShuffleSplit on Order Id (order-item grain; ~2.75 items/order)",
+        f"  Train: {n_train_rows:,} rows, {n_train_orders:,} unique orders",
+        f"  Test:  {n_test_rows:,} rows, {n_test_orders:,} unique orders",
+        "",
+        "Leakage / unsafe columns removed before modeling:",
+        "  Post-outcome: real shipping days, delivery status, shipping date,",
+        "  order status, realized profit fields.",
+        "  PII / geo / media: customer identifiers, passwords, lat/long, etc.",
+        f"  {GROUP_KEY} used only for grouping, not as a model feature.",
+        "",
+        "Feature engineering:",
+        "  Parsed order date → order_month, order_day_of_week, order_hour.",
+        "  Kept Shipping Mode and Days for shipment (scheduled).",
+        "  Note: Shipping Mode and scheduled days are perfectly collinear in DataCo;",
+        "  a per-mode base-rate benchmark is reported below.",
         "",
         "Models trained:",
         "  • Logistic Regression — baseline model",
         "  • Decision Tree — simple baseline",
         "  • Random Forest — ensemble comparison model",
-        f"  • XGBoost — {xgb_role}",
+        "  • XGBoost — primary model (deployment, SHAP, report)",
         "",
-        "Primary metric: PR-AUC (average precision, imbalance-aware)",
+        "Primary metric: PR-AUC (average precision)",
+        "",
+        "Shipping-mode base-rate benchmark (test set, train-set mode late rates):",
+        (
+            f"  ROC-AUC: {benchmark['roc_auc']:.4f}"
+            if not np.isnan(benchmark["roc_auc"])
+            else "  ROC-AUC: n/a"
+        ),
+        (
+            f"  PR-AUC:  {benchmark['pr_auc']:.4f}"
+            if not np.isnan(benchmark["pr_auc"])
+            else "  PR-AUC:  n/a"
+        ),
         "",
         "Model comparison (test set):",
         comparison.to_string(index=False, float_format=lambda x: f"{x:.4f}"),
@@ -403,21 +540,19 @@ def write_model_selection_summary(
         f"Best model by PR-AUC: {best_name}",
         f"  PR-AUC: {best_row['pr_auc']:.4f}",
         "",
-    ]
-    if tuned_threshold is not None:
-        lines += [
-            f"XGBoost F1-optimal threshold (tuned on train): {tuned_threshold:.3f}",
-            "(default 0.5 used for the comparison table; tuned threshold reported",
-            "in threshold_analysis.txt for deployment decisions.)",
-            "",
-        ]
-    lines += [
         "Saved artifacts:",
         "  • best_model.pkl — highest PR-AUC pipeline",
-        f"  • primary_model.pkl — XGBoost pipeline ({xgb_role})",
-        "  • xgb_model.pkl — XGBoost pipeline (explainability / Streamlit)",
-        "  • predictions_test.csv — XGBoost test predictions + default probability",
+        "  • primary_model.pkl — XGBoost pipeline (official primary)",
+        "  • xgb_model.pkl — XGBoost pipeline (explainability / deployment)",
+        "  • predictions_test.csv — XGBoost test predictions",
+        "  • late_rate_by_shipping_mode.csv / shipping_mode_model_performance.csv",
         "",
+        "Shipping Mode analysis:",
+        "  Operationally important and strongly related to delivery timeliness in",
+        "  DataCo; per-mode metrics and base-rate benchmark are included.",
+        "",
+        "Limitation:",
+        "  DataCo is a simulated teaching dataset; disclose limitations in the report.",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -438,7 +573,7 @@ def plot_model_comparison(comparison: pd.DataFrame, path: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5))
     plot_df.plot(kind="bar", ax=ax, rot=20)
     ax.set_ylabel("Score")
-    ax.set_title("Model Comparison — loan_status (Test Set)")
+    ax.set_title("Model Comparison — Late_delivery_risk (Test Set)")
     ax.set_ylim(0, 1.05)
     ax.legend(loc="lower right", fontsize=8)
     fig.tight_layout()
@@ -486,6 +621,20 @@ def plot_feature_importance(
     plt.close(fig)
 
 
+def plot_late_rate_by_shipping_mode(summary: pd.DataFrame, path: Path) -> None:
+    if summary.empty:
+        return
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(summary[SHIPPING_MODE_COL], summary["late_rate"] * 100.0)
+    ax.set_ylabel("Late rate (%)")
+    ax.set_xlabel(SHIPPING_MODE_COL)
+    ax.set_title("Late Delivery Rate by Shipping Mode")
+    plt.xticks(rotation=20, ha="right")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
 def run_shap_summary(
     pipeline: Pipeline, X_test: pd.DataFrame, path: Path, max_samples: int = 500
 ) -> None:
@@ -521,69 +670,48 @@ def run_shap_summary(
 
 
 def save_xgboost_predictions(
-    y_test: np.ndarray, y_pred: np.ndarray, proba_pos: np.ndarray, path: Path
+    order_ids_test: pd.Series,
+    shipping_test: pd.Series,
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+    proba_pos: np.ndarray,
+    path: Path,
 ) -> None:
     pred_df = pd.DataFrame(
         {
-            "y_true": [CLASS_LABELS[i] for i in y_test],
-            "y_pred": [CLASS_LABELS[i] for i in y_pred],
+            GROUP_KEY: order_ids_test.values,
+            "y_true": y_test,
+            "y_pred": y_pred,
+            "y_proba_late": proba_pos,
             "model_name": "XGBoost",
-            "proba_default": proba_pos,
         }
     )
+    if len(shipping_test):
+        pred_df[SHIPPING_MODE_COL] = shipping_test.values
     pred_df.to_csv(path, index=False)
 
 
-def write_threshold_analysis(
-    path: Path,
-    y_test: np.ndarray,
-    proba_pos: np.ndarray,
-    tuned_threshold: float,
-) -> None:
-    rows = []
-    for thr in [0.3, 0.4, 0.5, tuned_threshold, 0.6, 0.7]:
-        pred = (proba_pos >= thr).astype(int)
-        rows.append(
-            {
-                "threshold": round(thr, 3),
-                "precision": round(precision_score(y_test, pred, zero_division=0), 4),
-                "recall": round(recall_score(y_test, pred, zero_division=0), 4),
-                "f1": round(f1_score(y_test, pred, zero_division=0), 4),
-            }
-        )
-    table = (
-        pd.DataFrame(rows).drop_duplicates(subset="threshold").sort_values("threshold")
-    )
-    lines = [
-        "XGBoost Threshold Analysis (test set)",
-        "=" * 40,
-        f"F1-optimal threshold (tuned on train): {tuned_threshold:.3f}",
-        "",
-        table.to_string(index=False),
-        "",
-        "Lower thresholds catch more defaults (higher recall) at the cost of",
-        "precision — a business trade-off for credit approval policy.",
-    ]
-    path.write_text("\n".join(lines), encoding="utf-8")
-
-
-def run_experiment(
-    experiment: dict[str, Any],
+def train_and_evaluate(
+    output_dir: Path,
     num_cols: list[str],
     cat_cols: list[str],
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
-    y_train_arr: np.ndarray,
-    y_test_arr: np.ndarray,
-    scale_pos_weight: float,
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+    order_ids_test: pd.Series,
+    shipping_test: pd.Series,
+    train_modes: pd.Series,
+    late_rate_summary: pd.DataFrame,
+    n_train_rows: int,
+    n_test_rows: int,
+    n_train_orders: int,
+    n_test_orders: int,
 ) -> pd.DataFrame:
-    output_dir = Path(experiment["output_dir"])
-    clear_output_dir(output_dir)
     trained: dict[str, dict[str, Any]] = {}
     comparison_rows: list[dict[str, Any]] = []
-    weighted = bool(experiment["weighted"])
 
-    print(f"Training binary models ({experiment['display']})...")
+    print("Training binary models...")
     for spec in MODEL_SPECS:
         display = spec["display"]
         print(f"  • {display}")
@@ -594,14 +722,9 @@ def run_experiment(
 
         try:
             pipeline = make_model_pipeline(
-                num_cols,
-                cat_cols,
-                spec["scaled"],
-                spec["key"],
-                weighted,
-                scale_pos_weight,
+                num_cols, cat_cols, spec["scaled"], spec["key"]
             )
-            pipeline.fit(X_train, y_train_arr)
+            pipeline.fit(X_train, y_train)
         except Exception as exc:
             warnings.warn(
                 f"{display} training failed ({exc}) — skipping.", stacklevel=2
@@ -610,7 +733,7 @@ def run_experiment(
 
         proba_pos = positive_proba(pipeline, X_test)
         y_pred = pipeline.predict(X_test)
-        metrics = evaluate_binary(y_test_arr, y_pred, proba_pos, display)
+        metrics = evaluate_binary(y_test, y_pred, proba_pos, display)
 
         save_model_pickle(pipeline, output_dir / spec["pkl"])
         save_confusion_matrix(metrics["confusion_matrix"], output_dir / spec["cm"])
@@ -632,8 +755,7 @@ def run_experiment(
         trained[display] = {"spec": spec, "pipeline": pipeline, "metrics": metrics}
 
     if not trained:
-        print("ERROR: No models were trained successfully.")
-        sys.exit(1)
+        raise RuntimeError("No models were trained successfully.")
 
     comparison = pd.DataFrame(comparison_rows)
     comparison.to_csv(output_dir / "model_comparison.csv", index=False)
@@ -641,45 +763,65 @@ def run_experiment(
     best_name = select_best_model(comparison)
     save_model_pickle(trained[best_name]["pipeline"], output_dir / "best_model.pkl")
 
-    tuned_threshold: float | None = None
+    benchmark = shipping_mode_base_rate_benchmark(
+        train_modes, y_train, shipping_test, y_test
+    )
+    print(
+        "\nShipping-mode base-rate benchmark (test): "
+        f"ROC-AUC={benchmark['roc_auc']:.4f}, PR-AUC={benchmark['pr_auc']:.4f}"
+    )
+
+    late_rate_summary.to_csv(output_dir / "late_rate_by_shipping_mode.csv", index=False)
+
     if "XGBoost" in trained:
         xgb_pipeline = trained["XGBoost"]["pipeline"]
         xgb_metrics = trained["XGBoost"]["metrics"]
         save_model_pickle(xgb_pipeline, output_dir / "primary_model.pkl")
+        save_model_pickle(xgb_pipeline, output_dir / "xgb_model.pkl")
+
         if xgb_metrics["proba_pos"] is not None:
+            mode_perf = xgboost_performance_by_shipping_mode(
+                shipping_test,
+                y_test,
+                xgb_metrics["y_pred"],
+                xgb_metrics["proba_pos"],
+            )
+            mode_perf.to_csv(
+                output_dir / "shipping_mode_model_performance.csv", index=False
+            )
             save_xgboost_predictions(
-                y_test_arr,
+                order_ids_test,
+                shipping_test,
+                y_test,
                 xgb_metrics["y_pred"],
                 xgb_metrics["proba_pos"],
                 output_dir / "predictions_test.csv",
-            )
-            train_proba = positive_proba(xgb_pipeline, X_train)
-            tuned_threshold, _ = tune_threshold(y_train_arr, train_proba)
-            write_threshold_analysis(
-                output_dir / "threshold_analysis.txt",
-                y_test_arr,
-                xgb_metrics["proba_pos"],
-                tuned_threshold,
             )
     else:
         warnings.warn(
             "XGBoost not available — primary_model.pkl / predictions not created.",
             stacklevel=2,
         )
+        pd.DataFrame().to_csv(
+            output_dir / "shipping_mode_model_performance.csv", index=False
+        )
 
     write_model_selection_summary(
         output_dir / "model_selection_summary.txt",
         comparison,
         best_name,
-        str(experiment["display"]),
-        output_dir == OUTPUT_DIR,
-        tuned_threshold,
+        benchmark,
+        n_train_rows,
+        n_test_rows,
+        n_train_orders,
+        n_test_orders,
     )
 
     print()
     print("Model comparison (test set):")
     print(comparison.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
     print(f"\nBest model (by PR-AUC): {best_name}")
+    print("Primary model: XGBoost")
     print("Saved outputs to", output_dir.relative_to(PROJECT_ROOT))
 
     try:
@@ -713,49 +855,63 @@ def run_experiment(
         except Exception as exc:
             warnings.warn(f"SHAP step failed ({exc}).", stacklevel=2)
 
-    comparison.insert(0, "experiment", experiment["display"])
+    try:
+        plot_late_rate_by_shipping_mode(
+            late_rate_summary, output_dir / "late_rate_by_shipping_mode.png"
+        )
+    except Exception as exc:
+        warnings.warn(f"late_rate_by_shipping_mode plot failed ({exc}).", stacklevel=2)
+
     return comparison
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
-    X, y = load_and_prepare_data()
-    num_cols, cat_cols = split_features(X)
+    X, y, groups, order_ids, shipping_modes, shipping_df = load_and_prepare_data()
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE,
-        stratify=y,
-    )
-    y_train_arr = y_train.to_numpy()
-    y_test_arr = y_test.to_numpy()
+    clear_output_dir(OUTPUT_DIR)
 
-    n_pos = int((y_train_arr == POSITIVE_CLASS).sum())
-    n_neg = int((y_train_arr != POSITIVE_CLASS).sum())
-    scale_pos_weight = n_neg / max(n_pos, 1)
-
-    combined: list[pd.DataFrame] = []
-    for experiment in EXPERIMENTS:
-        combined.append(
-            run_experiment(
-                experiment,
-                num_cols,
-                cat_cols,
-                X_train,
-                X_test,
-                y_train_arr,
-                y_test_arr,
-                scale_pos_weight,
+    late_rate_summary = compute_late_rate_by_shipping_mode(shipping_df)
+    if not late_rate_summary.empty:
+        print("Late rate by Shipping Mode:")
+        print(
+            late_rate_summary.to_string(
+                index=False, float_format=lambda x: f"{x:.4f}" if x < 1 else f"{x:.0f}"
             )
         )
+        print()
 
-    combined_df = pd.concat(combined, ignore_index=True)
-    combined_df.to_csv(OUTPUT_DIR / "model_comparison_all_experiments.csv", index=False)
-    print("\nCombined experiment comparison saved to")
+    num_cols, cat_cols = split_features(X)
+    X_train, X_test, y_train, y_test, order_ids_test, shipping_test = (
+        group_train_test_split(X, y, groups, order_ids, shipping_modes)
+    )
+
+    train_groups = groups.iloc[X_train.index]
+    test_groups = groups.iloc[X_test.index]
+    train_modes = shipping_modes.iloc[X_train.index]
+
     print(
-        (OUTPUT_DIR / "model_comparison_all_experiments.csv").relative_to(PROJECT_ROOT)
+        f"Train size: {len(X_train):,} rows ({train_groups.nunique():,} unique orders)"
+    )
+    print(f"Test size:  {len(X_test):,} rows ({test_groups.nunique():,} unique orders)")
+    print()
+
+    train_and_evaluate(
+        OUTPUT_DIR,
+        num_cols,
+        cat_cols,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        order_ids_test,
+        shipping_test,
+        train_modes,
+        late_rate_summary,
+        len(X_train),
+        len(X_test),
+        int(train_groups.nunique()),
+        int(test_groups.nunique()),
     )
 
 
