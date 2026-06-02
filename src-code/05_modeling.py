@@ -437,7 +437,16 @@ def xgboost_performance_by_shipping_mode(
 ) -> pd.DataFrame:
     if shipping_test.empty:
         return pd.DataFrame(
-            columns=[SHIPPING_MODE_COL, "n_rows", "accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"]
+            columns=[
+                SHIPPING_MODE_COL,
+                "n_rows",
+                "accuracy",
+                "precision",
+                "recall",
+                "f1",
+                "roc_auc",
+                "pr_auc",
+            ]
         )
     rows: list[dict[str, Any]] = []
     test_df = pd.DataFrame(

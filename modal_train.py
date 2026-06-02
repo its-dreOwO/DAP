@@ -41,7 +41,9 @@ def train() -> None:
     import importlib.util
     from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location("modeling", "/root/src/05_modeling.py")
+    spec = importlib.util.spec_from_file_location(
+        "modeling", "/root/src/05_modeling.py"
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
