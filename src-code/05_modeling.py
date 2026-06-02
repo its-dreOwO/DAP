@@ -153,7 +153,14 @@ MODEL_SPECS: list[dict[str, Any]] = [
 # ── data loading & feature prep ─────────────────────────────────────────────
 def load_dataco_dataframe() -> pd.DataFrame:
     if CLEAN_CSV.exists():
-        return pd.read_csv(CLEAN_CSV)
+        df = pd.read_csv(CLEAN_CSV)
+        if TARGET_COL in df.columns:
+            return df
+        warnings.warn(
+            f"{CLEAN_CSV.name} exists but lacks '{TARGET_COL}' — "
+            "it may be from a previous dataset pivot. Falling back to raw CSV.",
+            stacklevel=2,
+        )
     if not RAW_CSV.exists():
         raise FileNotFoundError(
             f"Dataset not found. Expected {CLEAN_CSV} (run 01 first) or {RAW_CSV}."
@@ -186,8 +193,7 @@ def load_and_prepare_data() -> tuple[
     pd.Series,
     pd.Series,
     pd.Series,
-    pd.Series,
-    pd.DataFrame,
+    pd.DataFrame | None,
 ]:
     df = load_dataco_dataframe()
     df = drop_leakage_and_pii(df)
@@ -215,7 +221,6 @@ def load_and_prepare_data() -> tuple[
     df = add_engineered_features(df)
     y = df[TARGET_COL].astype(int)
     groups = df[GROUP_KEY]
-    order_ids = df[GROUP_KEY]
     shipping_modes = (
         df[SHIPPING_MODE_COL]
         if SHIPPING_MODE_COL in df.columns
@@ -224,7 +229,7 @@ def load_and_prepare_data() -> tuple[
 
     feature_drop = [TARGET_COL] + [c for c in NON_FEATURE_COLUMNS if c in df.columns]
     X = df.drop(columns=feature_drop)
-    return X, y, groups, order_ids, shipping_modes, shipping_df
+    return X, y, groups, shipping_modes, shipping_df
 
 
 def split_features(X: pd.DataFrame) -> tuple[list[str], list[str]]:
@@ -239,7 +244,6 @@ def group_train_test_split(
     X: pd.DataFrame,
     y: pd.Series,
     groups: pd.Series,
-    order_ids: pd.Series,
     shipping_modes: pd.Series,
 ) -> tuple[
     pd.DataFrame,
@@ -255,9 +259,9 @@ def group_train_test_split(
     X_test = X.iloc[test_idx]
     y_train = y.iloc[train_idx].to_numpy()
     y_test = y.iloc[test_idx].to_numpy()
-    order_ids_test = order_ids.iloc[test_idx]
+    groups_test = groups.iloc[test_idx]
     shipping_test = shipping_modes.iloc[test_idx]
-    return X_train, X_test, y_train, y_test, order_ids_test, shipping_test
+    return X_train, X_test, y_train, y_test, groups_test, shipping_test
 
 
 def build_preprocessor(
@@ -307,6 +311,7 @@ def build_estimator(key: str) -> Any:
         return XGBClassifier(
             objective="binary:logistic",
             eval_metric="aucpr",
+            device="cuda",
             random_state=RANDOM_STATE,
             n_estimators=400,
             max_depth=5,
@@ -314,7 +319,6 @@ def build_estimator(key: str) -> Any:
             subsample=0.9,
             colsample_bytree=0.9,
             reg_lambda=1.5,
-            n_jobs=-1,
         )
     raise ValueError(f"Unknown model key: {key}")
 
@@ -413,6 +417,8 @@ def shipping_mode_base_rate_benchmark(
     test_modes: pd.Series,
     y_test: np.ndarray,
 ) -> dict[str, float]:
+    if train_modes.empty or test_modes.empty:
+        return {"roc_auc": np.nan, "pr_auc": np.nan}
     train_df = pd.DataFrame(
         {SHIPPING_MODE_COL: train_modes.values, TARGET_COL: y_train}
     )
@@ -429,6 +435,10 @@ def xgboost_performance_by_shipping_mode(
     y_pred: np.ndarray,
     proba_pos: np.ndarray,
 ) -> pd.DataFrame:
+    if shipping_test.empty:
+        return pd.DataFrame(
+            columns=[SHIPPING_MODE_COL, "n_rows", "accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"]
+        )
     rows: list[dict[str, Any]] = []
     test_df = pd.DataFrame(
         {
@@ -460,8 +470,15 @@ def xgboost_performance_by_shipping_mode(
 
 # ── persistence ──────────────────────────────────────────────────────────────
 def clear_output_dir(directory: Path) -> None:
-    if directory.exists():
-        shutil.rmtree(directory)
+    if directory.exists() or directory.is_symlink():
+        # rmtree refuses symlinks (e.g. Modal volume mounts); delete contents instead
+        if directory.is_symlink() or directory.is_dir():
+            for child in directory.iterdir():
+                if child.is_file() or child.is_symlink():
+                    child.unlink()
+                elif child.is_dir():
+                    shutil.rmtree(child)
+            return
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -699,7 +716,7 @@ def train_and_evaluate(
     X_test: pd.DataFrame,
     y_train: np.ndarray,
     y_test: np.ndarray,
-    order_ids_test: pd.Series,
+    groups_test: pd.Series,
     shipping_test: pd.Series,
     train_modes: pd.Series,
     late_rate_summary: pd.DataFrame,
@@ -790,7 +807,7 @@ def train_and_evaluate(
                 output_dir / "shipping_mode_model_performance.csv", index=False
             )
             save_xgboost_predictions(
-                order_ids_test,
+                groups_test,
                 shipping_test,
                 y_test,
                 xgb_metrics["y_pred"],
@@ -867,7 +884,7 @@ def train_and_evaluate(
 
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
-    X, y, groups, order_ids, shipping_modes, shipping_df = load_and_prepare_data()
+    X, y, groups, shipping_modes, shipping_df = load_and_prepare_data()
 
     clear_output_dir(OUTPUT_DIR)
 
@@ -882,18 +899,17 @@ def main() -> None:
         print()
 
     num_cols, cat_cols = split_features(X)
-    X_train, X_test, y_train, y_test, order_ids_test, shipping_test = (
-        group_train_test_split(X, y, groups, order_ids, shipping_modes)
+    X_train, X_test, y_train, y_test, groups_test, shipping_test = (
+        group_train_test_split(X, y, groups, shipping_modes)
     )
 
-    train_groups = groups.iloc[X_train.index]
-    test_groups = groups.iloc[X_test.index]
-    train_modes = shipping_modes.iloc[X_train.index]
+    train_groups = groups.loc[X_train.index]
+    train_modes = shipping_modes.loc[X_train.index]
 
     print(
         f"Train size: {len(X_train):,} rows ({train_groups.nunique():,} unique orders)"
     )
-    print(f"Test size:  {len(X_test):,} rows ({test_groups.nunique():,} unique orders)")
+    print(f"Test size:  {len(X_test):,} rows ({groups_test.nunique():,} unique orders)")
     print()
 
     train_and_evaluate(
@@ -904,14 +920,14 @@ def main() -> None:
         X_test,
         y_train,
         y_test,
-        order_ids_test,
+        groups_test,
         shipping_test,
         train_modes,
         late_rate_summary,
         len(X_train),
         len(X_test),
         int(train_groups.nunique()),
-        int(test_groups.nunique()),
+        int(groups_test.nunique()),
     )
 
 
