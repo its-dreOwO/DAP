@@ -1,8 +1,6 @@
 # Supplier Lead-Time and Late Delivery Risk Prediction
 
-DAP391m — Project 8, Group 8, FPT University HCMC.  
-Supervisor: Mr. Nguyen Hoai Linh.  
-Team: Nguyễn Hoài Khánh, Hồ Lâm Bảo Đăng, Dương Gia Bảo.
+
 
 Predicts **late delivery risk** for retail procurement orders using the
 [DataCo Smart Supply Chain](https://www.kaggle.com/datasets/shashwatwork/dataco-smart-supply-chain-for-big-data-analysis)
