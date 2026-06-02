@@ -1,35 +1,58 @@
-DAP391m — Model Selection Summary (Binary Credit-Default Classification)
+DAP391m — Model Selection Summary (DataCo Late Delivery)
 ========================================================================
 
-Experiment: Baseline PR-AUC
-Dataset: Data/credit_risk_dataset.csv (cleaned)
-Target: loan_status (0 = Non-default, 1 = Default)
-Problem: binary classification (positive class = Default)
+Final dataset: DataCoSupplyChainDataset.csv (DataCo Smart Supply Chain)
+Target: Late_delivery_risk (0 = on-time, 1 = late delivery)
+Problem: binary late-delivery risk prediction for retail procurement
+
+Split: GroupShuffleSplit on Order Id (order-item grain; ~2.75 items/order)
+  Train: 144,650 rows, 52,601 unique orders
+  Test:  35,869 rows, 13,151 unique orders
+
+Leakage / unsafe columns removed before modeling:
+  Post-outcome: real shipping days, delivery status, shipping date,
+  order status, realized profit fields.
+  PII / geo / media: customer identifiers, passwords, lat/long, etc.
+  Order Id used only for grouping, not as a model feature.
+
+Feature engineering:
+  Parsed order date → order_month, order_day_of_week, order_hour.
+  Kept Shipping Mode and Days for shipment (scheduled).
+  Note: Shipping Mode and scheduled days are perfectly collinear in DataCo;
+  a per-mode base-rate benchmark is reported below.
 
 Models trained:
   • Logistic Regression — baseline model
   • Decision Tree — simple baseline
   • Random Forest — ensemble comparison model
-  • XGBoost — official deployment + Streamlit model
+  • XGBoost — primary model (deployment, SHAP, report)
 
-Primary metric: PR-AUC (average precision, imbalance-aware)
+Primary metric: PR-AUC (average precision)
+
+Shipping-mode base-rate benchmark (test set, train-set mode late rates):
+  ROC-AUC: 0.7253
+  PR-AUC:  0.7485
 
 Model comparison (test set):
               model  accuracy  precision  recall     f1  pr_auc  roc_auc
-Logistic Regression    0.8806     0.7855  0.6248 0.6960  0.7635   0.8849
-      Decision Tree    0.9323     0.9776  0.7066 0.8203  0.8394   0.8952
-      Random Forest    0.9352     0.9646  0.7306 0.8315  0.8902   0.9343
-            XGBoost    0.9397     0.9795  0.7398 0.8429  0.9110   0.9517
+Logistic Regression    0.6702     0.7315  0.6297 0.6768  0.7958   0.7264
+      Decision Tree    0.7150     0.8491  0.5842 0.6921  0.7946   0.7686
+      Random Forest    0.7003     0.7917  0.6153 0.6924  0.8209   0.7554
+            XGBoost    0.7138     0.8404  0.5901 0.6934  0.8331   0.7668
 
 Best model by PR-AUC: XGBoost
-  PR-AUC: 0.9110
-
-XGBoost F1-optimal threshold (tuned on train): 0.321
-(default 0.5 used for the comparison table; tuned threshold reported
-in threshold_analysis.txt for deployment decisions.)
+  PR-AUC: 0.8331
 
 Saved artifacts:
   • best_model.pkl — highest PR-AUC pipeline
-  • primary_model.pkl — XGBoost pipeline (official deployment + Streamlit model)
-  • xgb_model.pkl — XGBoost pipeline (explainability / Streamlit)
-  • predictions_test.csv — XGBoost test predictions + default probability
+  • primary_model.pkl — XGBoost pipeline (official primary)
+  • xgb_model.pkl — XGBoost pipeline (explainability / deployment)
+  • predictions_test.csv — XGBoost test predictions
+  • late_rate_by_shipping_mode.csv / shipping_mode_model_performance.csv
+
+Shipping Mode analysis:
+  Operationally important and strongly related to delivery timeliness in
+  DataCo; per-mode metrics and base-rate benchmark are included.
+
+Limitation:
+  DataCo is a simulated teaching dataset; disclose limitations in the report.

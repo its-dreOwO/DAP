@@ -1,0 +1,4 @@
+target_column,class_value,count,pct
+Late_delivery_risk,0,81542,45.17
+Late_delivery_risk,1,98977,54.83
+Late_delivery_risk,TOTAL,180519,100.0
