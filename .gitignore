@@ -15,3 +15,9 @@ Data/dataco_raw/
 
 # Cleaned DataCo CSV is 52MB (180k rows). Regenerate via src-code/01_ingestion_cleaning.py
 Data/filtered/clean_data.csv
+
+# Streamlit secrets (never commit API keys)
+.streamlit/secrets.toml
+
+# Codegraph MCP index/daemon (machine-local, never commit)
+.codegraph/
