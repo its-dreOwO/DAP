@@ -283,27 +283,6 @@ def risk_tier(p_late: float) -> tuple[str, str]:
     return "HIGH", "red"
 
 
-def ops_note(p_late: float, threshold: float) -> str:
-    flagged = p_late >= threshold
-    decision = "FLAG as late-risk" if flagged else "expect on-time"
-    base = (
-        f"At the decision threshold ({threshold:.2f}), this shipment would be "
-        f"**{decision}** (P(late) = {p_late:.1%})."
-    )
-    if p_late >= 0.65:
-        return base + (
-            " High risk — consider expediting to a tighter-SLA carrier only if it"
-            " genuinely ships faster, padding the promised delivery date, and"
-            " notifying the customer proactively."
-        )
-    if p_late >= 0.40:
-        return base + (
-            " Moderate risk — add a delivery-date buffer and monitor; the cost of a"
-            " false alarm is low relative to a surprised customer."
-        )
-    return base + " Low risk — standard handling; no proactive intervention needed."
-
-
 def show_image_if_exists(filename: str, caption: str) -> None:
     path = OUTPUT_DIR / filename
     if path.exists():
@@ -499,9 +478,6 @@ if mode_rate is not None:
         "assessment shows ML adds only ~+0.01 ROC-AUC over this one-line lookup."
     )
 
-st.markdown("**Operational recommendation**")
-st.write(ops_note(p_late, threshold))
-
 with st.expander("Feature vector used for this prediction"):
     # Transposing yields a single object column of mixed str/int/float values,
     # which Arrow can't serialize — render every value as text.
@@ -662,26 +638,6 @@ explain_cols = st.columns(2)
 for idx, (filename, caption) in enumerate(ARTIFACT_IMAGES[:2]):
     with explain_cols[idx % 2]:
         show_image_if_exists(filename, caption)
-
-# ── limitations ──────────────────────────────────────────────────────────────
-st.header("Limitations")
-st.markdown("""
-- **The signal concentrates in shipping mode.** `Shipping Mode` and \
-`Days for shipment (scheduled)` are perfectly collinear, and late rates are \
-roughly flat (~55%) across market, region, segment, and department. A one-line \
-per-mode lookup already scores ROC-AUC ≈ 0.73; the four ML models add only \
-~+0.01 ROC / +0.06 PR. The non-mode inputs here mostly probe weak \
-within-mode residual signal.
-- **DataCo is a *simulated* dataset.** The clean one-mode-one-SLA structure and \
-flat segment rates are the fingerprint of synthetic data — acceptable for \
-coursework but disclosed here.
-- **Order-item grain.** Models are trained with `GroupShuffleSplit` on \
-`Order Id` so line-items from one order never straddle train/test.
-- **Threshold is a business-cost choice**, not an imbalance fix (classes are \
-~55/45 balanced). Set it from the relative cost of a false late-flag vs. a \
-missed late shipment.
-- Academic decision-support tool, **not** a production logistics system.
-""")
 
 # Apply AI-requested input/model changes by re-running once, after rendering.
 if st.session_state.get("rerun_pending"):
