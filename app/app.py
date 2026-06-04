@@ -114,10 +114,32 @@ SUMMARIZE_PROMPT = (
 )
 
 
+def _force_cpu_inference(model: Any) -> Any:
+    """Pin the XGBoost booster to CPU.
+
+    The models are trained on GPU (Modal T4), so the unpickled booster defaults
+    to ``device=cuda``. Scoring a single CPU-resident row then triggers a
+    device-mismatch warning and a slow DMatrix fallback. We always infer on CPU
+    here, so force it once at load time.
+    """
+    final = getattr(model, "named_steps", {}).get("model", model)
+    try:
+        final.set_params(device="cpu")
+    except Exception:  # noqa: BLE001 - non-XGBoost estimators have no device
+        pass
+    get_booster = getattr(final, "get_booster", None)
+    if callable(get_booster):
+        try:
+            get_booster().set_param({"device": "cpu"})
+        except Exception:  # noqa: BLE001 - booster may be unavailable
+            pass
+    return model
+
+
 @st.cache_resource
 def load_model_file(filename: str) -> Any:
     with (OUTPUT_DIR / filename).open("rb") as handle:
-        return pickle.load(handle)
+        return _force_cpu_inference(pickle.load(handle))
 
 
 def resolve_model(preferred: str | None = None) -> tuple[Any | None, str | None, bool]:
@@ -285,7 +307,7 @@ def ops_note(p_late: float, threshold: float) -> str:
 def show_image_if_exists(filename: str, caption: str) -> None:
     path = OUTPUT_DIR / filename
     if path.exists():
-        st.image(str(path), caption=caption, use_container_width=True)
+        st.image(str(path), caption=caption, width="stretch")
     else:
         st.info(f"`{filename}` not found in model outputs.")
 
@@ -481,7 +503,12 @@ st.markdown("**Operational recommendation**")
 st.write(ops_note(p_late, threshold))
 
 with st.expander("Feature vector used for this prediction"):
-    st.dataframe(features.T, use_container_width=True)
+    # Transposing yields a single object column of mixed str/int/float values,
+    # which Arrow can't serialize — render every value as text.
+    feature_view = features.T.reset_index()
+    feature_view.columns = ["feature", "value"]
+    feature_view["value"] = feature_view["value"].astype(str)
+    st.dataframe(feature_view, width="stretch", hide_index=True)
 
 
 # ── AI assistant ─────────────────────────────────────────────────────────────
@@ -587,9 +614,7 @@ for msg in st.session_state["chat_history"]:
 st.header("Model performance")
 comparison_path = OUTPUT_DIR / "model_comparison.csv"
 if comparison_path.exists():
-    st.dataframe(
-        pd.read_csv(comparison_path), use_container_width=True, hide_index=True
-    )
+    st.dataframe(pd.read_csv(comparison_path), width="stretch", hide_index=True)
 else:
     st.warning(f"`model_comparison.csv` not found. {PIPELINE_HINT}")
 
