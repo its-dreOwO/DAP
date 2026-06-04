@@ -528,3 +528,32 @@ def test_client_stream_chat_raises_on_non_200():
     with pytest.raises(ai.OpenRouterError) as exc:
         list(client.stream_chat([{"role": "user", "content": "x"}]))
     assert "server boom" in str(exc.value)
+
+
+# ── non-ASCII API key handling (em-dash paste artifact) ───────────────────────
+def test_client_strips_whitespace_from_key_and_model():
+    session = FakeSession(
+        FakeResponse(200, {"choices": [{"message": {"content": "hi"}}]})
+    )
+    client = ai.OpenRouterClient("  sk-or-key  ", "  some/model  ", session=session)
+    assert client.api_key == "sk-or-key"
+    assert client.model == "some/model"
+
+
+def test_client_chat_gives_clear_error_for_non_ascii_key():
+    bad_key = "sk-or-v1-" + ("a" * 50) + "—" + ("b" * 13)  # em-dash inside the key
+    client = ai.OpenRouterClient(bad_key, "m", session=FakeSession())
+    with pytest.raises(ai.OpenRouterError) as exc:
+        client.chat([{"role": "user", "content": "hi"}])
+    msg = str(exc.value).lower()
+    assert "non-ascii" in msg and "api key" in msg
+    assert "latin-1" not in msg  # the cryptic codec error must not leak through
+
+
+def test_client_stream_chat_gives_clear_error_for_non_ascii_key():
+    bad_key = "sk-or-v1-" + ("a" * 50) + "—" + ("b" * 13)
+    client = ai.OpenRouterClient(bad_key, "m", session=FakeSession())
+    with pytest.raises(ai.OpenRouterError) as exc:
+        list(client.stream_chat([{"role": "user", "content": "hi"}]))
+    msg = str(exc.value).lower()
+    assert "non-ascii" in msg and "api key" in msg

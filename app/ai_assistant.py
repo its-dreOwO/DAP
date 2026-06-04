@@ -61,11 +61,39 @@ class OpenRouterClient:
         timeout: int = DEFAULT_TIMEOUT,
         session: Any | None = None,
     ) -> None:
-        self.api_key = api_key
-        self.model = model
+        # Strip stray whitespace/newlines from pasted credentials.
+        self.api_key = api_key.strip()
+        self.model = model.strip()
         self.base_url = base_url
         self.timeout = timeout
         self.session = session if session is not None else requests
+
+    def _headers(self) -> dict[str, str]:
+        """Build request headers, validating they are Latin-1 encodable.
+
+        HTTP header values must be Latin-1. A key pasted with a non-ASCII
+        character (commonly a "smart" em-dash from a formatted copy) would
+        otherwise surface as a cryptic ``'latin-1' codec can't encode`` error —
+        translate that into an actionable message instead.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json; charset=utf-8",
+            "HTTP-Referer": "https://github.com/its-dreOwO/DAP",
+            "X-Title": "DAP391m Late-Delivery Risk Predictor",
+        }
+        for name, value in headers.items():
+            try:
+                value.encode("latin-1")
+            except UnicodeEncodeError:
+                where = (
+                    "your API key contains a non-ASCII character (e.g. a "
+                    '"smart" em-dash from copy-paste) — re-paste it as plain text'
+                    if name == "Authorization"
+                    else f"request header {name!r} contains a non-ASCII character"
+                )
+                raise OpenRouterError(f"Cannot send request: {where}.") from None
+        return headers
 
     def chat(
         self, messages: list[dict], tools: list[dict] | None = None
@@ -75,16 +103,11 @@ class OpenRouterClient:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/its-dreOwO/DAP",
-            "X-Title": "DAP391m Late-Delivery Risk Predictor",
-        }
+        headers = self._headers()
         try:
             resp = self.session.post(
                 self.base_url,
-                data=json.dumps(payload),
+                data=json.dumps(payload).encode("utf-8"),
                 headers=headers,
                 timeout=self.timeout,
             )
@@ -111,16 +134,11 @@ class OpenRouterClient:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/its-dreOwO/DAP",
-            "X-Title": "DAP391m Late-Delivery Risk Predictor",
-        }
+        headers = self._headers()
         try:
             resp = self.session.post(
                 self.base_url,
-                data=json.dumps(payload),
+                data=json.dumps(payload).encode("utf-8"),
                 headers=headers,
                 timeout=self.timeout,
                 stream=True,
