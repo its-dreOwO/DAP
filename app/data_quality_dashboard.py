@@ -17,22 +17,36 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "Data"
 CLEAN_DIR = PROJECT_ROOT / "Data" / "filtered"
 
+# (raw path relative to Data/, clean path relative to Data/filtered/).
+# DataCo raw is latin-1 encoded; load_pair falls back to it automatically.
 DATASETS = {
-    "credit_risk": ("credit_risk_dataset.csv", "clean_data.csv"),
+    "dataco_supply_chain": (
+        "dataco_raw/DataCoSupplyChainDataset.csv",
+        "clean_data.csv",
+    ),
 }
 
 st.set_page_config(page_title="DAP391m — Data Quality Dashboard", layout="wide")
 st.title("Data Quality Dashboard — Before vs After Cleaning")
 st.caption(
-    "DAP391m Project 8 · Group 8 · compares raw `Data/*.csv` against "
-    "`Data/filtered/*_clean.csv` with IQR, Z-score, range, and distribution diffs."
+    "DAP391m Project 8 · Group 8 · DataCo Smart Supply Chain · compares the raw "
+    "`Data/dataco_raw/*.csv` against the cleaned `Data/filtered/clean_data.csv` "
+    "with IQR, Z-score, range, and distribution diffs."
 )
+
+
+def _read_csv(path: Path) -> pd.DataFrame:
+    """Read a CSV, falling back to latin-1 (DataCo raw is not UTF-8)."""
+    try:
+        return pd.read_csv(path)
+    except UnicodeDecodeError:
+        return pd.read_csv(path, encoding="latin-1")
 
 
 @st.cache_data(show_spinner=False)
 def load_pair(raw_name: str, clean_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    raw = pd.read_csv(RAW_DIR / raw_name)
-    clean = pd.read_csv(CLEAN_DIR / clean_name)
+    raw = _read_csv(RAW_DIR / raw_name)
+    clean = _read_csv(CLEAN_DIR / clean_name)
     return raw, clean
 
 

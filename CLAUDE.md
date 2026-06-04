@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 >
 > **Read `report/dataco_dataset_assessment.md` first** — it is the honest viability record. Key findings: the target is leak-free, but `Shipping Mode` and `Days for shipment (scheduled)` are *perfectly collinear* and the whole problem collapses to a per-shipping-mode base rate (a one-line lookup scores ROC-AUC 0.725; four ML models add only +0.01 ROC / +0.06 PR). Classes are **balanced (54.8/45.2) → the class-imbalance / `scale_pos_weight` deliverable is now moot** (reframe threshold tuning as business cost). Data is **order-item grain (65,752 orders, ~2.75 items each) → `GroupShuffleSplit` on `Order Id` is mandatory**; order grain is the cleaner unit. DataCo is a **simulated** dataset — disclose it in the report.
 >
-> **Migration status:** ✅ `01`, `02`+`sql/analysis.sql` migrated to DataCo. ⬜ `03`–`06`, `app/`, `report/main.tex`, and **every CLAUDE.md section below still describes the credit dataset and is pending migration** — do not trust them for DataCo until updated.
+> **Migration status:** ✅ `01`, `02`+`sql/analysis.sql`, `05_modeling.py`, and `app/` (both `app.py` and `data_quality_dashboard.py`) migrated to DataCo. ⬜ `03`, `04`, `06`, `report/main.tex`, and **most CLAUDE.md sections below still describe the credit dataset and are pending migration** (notably *Data Architecture*, *Engineered Features*, *Models*, *SQL* — do not trust them for DataCo until updated). The *Streamlit App* section and this banner are current.
 >
 > **Pivot history.** (1) Original *supplier lead-time* dataset had a synthetic leakage target (ROC-AUC ≈ 0.52). (2) **2026-05-29** pivoted to *consumer credit-default risk* (`laotse/credit-risk-dataset`, XGBoost PR-AUC ≈ 0.91); supervisor's `uciml/german-credit` suggestion was rejected (no target column). (3) **2026-05-30** supervisor reversed to DataCo supply chain (this banner). All prior data/outputs preserved under `Data/archived/` and in git history.
 
@@ -160,7 +160,15 @@ Live log at `report/ai_audit_log.md`. Claude adds DECISION / PROBLEM-SOLVING / V
 .venv/bin/streamlit run app/app.py
 ```
 
-Loads `primary_model.pkl` from `Data/filtered/model_outputs/`, takes an applicant's loan details in the sidebar, derives the engineered features inline (kept in sync with `04`/`05`), and returns P(default), a risk tier, and an approve/decline recommendation at the tuned threshold. `app/data_quality_dashboard.py` compares raw `credit_risk_dataset.csv` vs cleaned `clean_data.csv`.
+Loads `primary_model.pkl` (XGBoost) from `Data/filtered/model_outputs/` and scores a single shipment for **late-delivery risk** (`Late_delivery_risk`, 1 = late). The sidebar exposes shipping mode (the dominant signal), market/region/segment/department/category, payment type, and order economics; **scheduled days is auto-derived from the shipping mode** (they're collinear). The prediction row is built to match `model.feature_names_in_` exactly — non-exposed columns default from `clean_data.csv` (mode/median), so the deployed pipeline always receives the columns it was trained on. Output is **P(late), a risk tier, and an operational recommendation**, shown next to the per-shipping-mode historical base rate (the honest base-rate benchmark). The decision threshold defaults to 0.5 (DataCo `05` writes no `threshold_analysis.txt`); reframe it as a business-cost choice, not an imbalance fix. `app/data_quality_dashboard.py` compares raw `Data/dataco_raw/DataCoSupplyChainDataset.csv` (latin-1) vs cleaned `clean_data.csv`.
+
+**Training (`modal_train.py`):** the four models are trained on Modal (T4 GPU) from `clean_data.csv` and artifacts are downloaded to `Data/filtered/model_outputs/`:
+
+```
+modal run modal_train.py
+```
+
+Current DataCo test results (group-split on `Order Id`): XGBoost is primary at **PR-AUC 0.832 / ROC-AUC 0.766**; the shipping-mode base-rate lookup alone scores ROC-AUC 0.725, so ML adds ~+0.01 ROC / +0.08 PR.
 
 ## Project Tracking
 

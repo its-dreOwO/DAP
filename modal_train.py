@@ -9,7 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 import modal
 
-DATA_CSV = "/opt/study/DAP/Data/dataco_raw/DataCoSupplyChainDataset.csv"
+# Train on the canonical cleaned dataset (01_ingestion_cleaning.py output):
+# 29 columns, leakage + PII already removed. This keeps the model's expected
+# feature set identical to the documented pipeline and to what app/app.py feeds.
+CLEAN_CSV = "/opt/study/DAP/Data/filtered/clean_data.csv"
 SCRIPT = "/opt/study/DAP/src-code/05_modeling.py"
 
 volume = modal.Volume.from_name("dap-outputs")
@@ -25,7 +28,7 @@ image = (
         "seaborn",
         "shap",
     )
-    .add_local_file(DATA_CSV, remote_path="/root/data/DataCoSupplyChainDataset.csv")
+    .add_local_file(CLEAN_CSV, remote_path="/root/data/clean_data.csv")
     .add_local_file(SCRIPT, remote_path="/root/src/05_modeling.py")
 )
 
@@ -47,8 +50,8 @@ def train() -> None:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    mod.RAW_CSV = Path("/root/data/DataCoSupplyChainDataset.csv")
-    mod.CLEAN_CSV = Path("/nonexistent/clean_data.csv")
+    mod.CLEAN_CSV = Path("/root/data/clean_data.csv")
+    mod.RAW_CSV = Path("/nonexistent/DataCoSupplyChainDataset.csv")
     mod.OUTPUT_DIR = Path("/root/outputs")
     mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
