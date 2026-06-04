@@ -101,6 +101,101 @@ class OpenRouterClient:
         except (KeyError, IndexError) as exc:
             raise OpenRouterError(f"Unexpected OpenRouter response: {body}") from exc
 
+    def stream_chat(self, messages: list[dict], tools: list[dict] | None = None):
+        """Yield raw streaming chunk dicts (OpenAI delta format) via SSE."""
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/its-dreOwO/DAP",
+            "X-Title": "DAP391m Late-Delivery Risk Predictor",
+        }
+        try:
+            resp = self.session.post(
+                self.base_url,
+                data=json.dumps(payload),
+                headers=headers,
+                timeout=self.timeout,
+                stream=True,
+            )
+        except Exception as exc:  # noqa: BLE001 - normalize all transport failures
+            raise OpenRouterError(f"OpenRouter request failed: {exc}") from exc
+
+        if resp.status_code != 200:
+            raise OpenRouterError(
+                f"OpenRouter returned {resp.status_code}: {resp.text}"
+            )
+        yield from iter_sse_json(resp.iter_lines())
+
+
+# ── SSE streaming helpers ─────────────────────────────────────────────────────
+def iter_sse_json(lines: Any) -> Any:
+    """Parse OpenRouter SSE ``data:`` lines into JSON dicts; stop at ``[DONE]``."""
+    for line in lines:
+        if isinstance(line, bytes):
+            line = line.decode("utf-8")
+        line = line.strip()
+        if not line or not line.startswith("data:"):
+            continue
+        data = line.removeprefix("data:").strip()
+        if data == "[DONE]":
+            break
+        try:
+            yield json.loads(data)
+        except ValueError:
+            continue
+
+
+def assemble_message_stream(chunks: Any):
+    """Consume streaming chunk dicts, yielding text fragments as they arrive.
+
+    Returns (via ``StopIteration.value``) the fully assembled assistant message,
+    merging streamed tool-call fragments (each ``function.arguments`` delta is
+    concatenated per tool-call index).
+    """
+    content_parts: list[str] = []
+    tool_calls: dict[int, dict[str, str]] = {}
+    for chunk in chunks:
+        choices = chunk.get("choices") or []
+        if not choices:
+            continue
+        delta = choices[0].get("delta") or {}
+        if delta.get("content"):
+            content_parts.append(delta["content"])
+            yield delta["content"]
+        for call in delta.get("tool_calls") or []:
+            idx = call.get("index", 0)
+            slot = tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+            if call.get("id"):
+                slot["id"] = call["id"]
+            fn = call.get("function") or {}
+            if fn.get("name"):
+                slot["name"] = fn["name"]
+            if fn.get("arguments"):
+                slot["arguments"] += fn["arguments"]
+
+    message: dict[str, Any] = {
+        "role": "assistant",
+        "content": "".join(content_parts) or None,
+    }
+    if tool_calls:
+        message["tool_calls"] = [
+            {
+                "id": slot["id"],
+                "type": "function",
+                "function": {"name": slot["name"], "arguments": slot["arguments"]},
+            }
+            for _, slot in sorted(tool_calls.items())
+        ]
+    return message
+
 
 # ── agent loop ────────────────────────────────────────────────────────────────
 def _parse_arguments(raw: Any) -> dict:
@@ -112,6 +207,36 @@ def _parse_arguments(raw: Any) -> dict:
         return json.loads(raw)
     except (TypeError, ValueError):
         return {}
+
+
+def _dispatch_tool(
+    name: str, args: dict, tools_impl: dict[str, Callable[..., Any]]
+) -> tuple[Any, str]:
+    """Run one tool, returning (result, human-readable action). Errors and
+    unknown tools become an error result fed back to the model, not a crash."""
+    if name not in tools_impl:
+        result: Any = {"error": f"unknown tool: {name}"}
+    else:
+        try:
+            result = tools_impl[name](**args)
+        except Exception as exc:  # noqa: BLE001 - surface to the model
+            result = {"error": str(exc)}
+    return result, _describe_action(name, args, result)
+
+
+def _tool_result_message(call: dict, result: Any) -> dict:
+    return {
+        "role": "tool",
+        "tool_call_id": call.get("id", ""),
+        "content": json.dumps(result, default=str),
+    }
+
+
+def _last_assistant_text(messages: list[dict]) -> str:
+    for msg in reversed(messages):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            return msg["content"]
+    return ""
 
 
 def run_agent(
@@ -142,30 +267,71 @@ def run_agent(
             fn = call.get("function", {})
             name = fn.get("name", "")
             args = _parse_arguments(fn.get("arguments"))
-            if name not in tools_impl:
-                result: Any = {"error": f"unknown tool: {name}"}
-            else:
-                try:
-                    result = tools_impl[name](**args)
-                except Exception as exc:  # noqa: BLE001 - surface to the model
-                    result = {"error": str(exc)}
-            actions.append(_describe_action(name, args, result))
-            working.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.get("id", ""),
-                    "content": json.dumps(result, default=str),
-                }
-            )
+            result, action = _dispatch_tool(name, args, tools_impl)
+            actions.append(action)
+            working.append(_tool_result_message(call, result))
 
-    # Hit the iteration cap: return the latest text plus a truncation note.
-    last_text = ""
-    for msg in reversed(working):
-        if msg.get("role") == "assistant" and msg.get("content"):
-            last_text = msg["content"]
-            break
     actions.append("(stopped: reached max tool iterations)")
-    return (last_text, actions)
+    return (_last_assistant_text(working), actions)
+
+
+def run_agent_stream(
+    client: Any,
+    messages: list[dict],
+    tools_impl: dict[str, Callable[..., Any]],
+    *,
+    max_iters: int = 5,
+):
+    """Streaming variant of :func:`run_agent`, yielding events for live UI.
+
+    Yields dicts with a ``kind`` of:
+    - ``"token"``  — a fragment of the final answer (stream into the chat bubble)
+    - ``"tool_start"`` / ``"tool_end"`` — a tool is about to run / has finished
+    - ``"final"`` — the last event, with the full ``text`` and ``actions`` list
+
+    Requires ``client.stream_chat`` (SSE). Tool side effects happen between the
+    start/end events, exactly as in the non-streaming loop.
+    """
+    working = list(messages)
+    actions: list[str] = []
+
+    for _ in range(max_iters):
+        gen = assemble_message_stream(client.stream_chat(working, TOOL_SCHEMAS))
+        message: dict[str, Any] = {}
+        while True:
+            try:
+                fragment = next(gen)
+            except StopIteration as stop:
+                message = stop.value
+                break
+            yield {"kind": "token", "text": fragment}
+
+        working.append(message)
+        tool_calls = message.get("tool_calls") or []
+        if not tool_calls:
+            yield {
+                "kind": "final",
+                "text": message.get("content") or "",
+                "actions": actions,
+            }
+            return
+
+        for call in tool_calls:
+            fn = call.get("function", {})
+            name = fn.get("name", "")
+            args = _parse_arguments(fn.get("arguments"))
+            yield {"kind": "tool_start", "name": name, "args": args}
+            result, action = _dispatch_tool(name, args, tools_impl)
+            actions.append(action)
+            yield {"kind": "tool_end", "name": name, "summary": action}
+            working.append(_tool_result_message(call, result))
+
+    actions.append("(stopped: reached max tool iterations)")
+    yield {
+        "kind": "final",
+        "text": _last_assistant_text(working),
+        "actions": actions,
+    }
 
 
 def _describe_action(name: str, args: dict, result: Any) -> str:

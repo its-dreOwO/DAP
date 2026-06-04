@@ -568,47 +568,79 @@ TOOLS_IMPL = {
 }
 
 
+def _stream_assistant_reply(messages: list[dict]) -> tuple[str, list[str]]:
+    """Stream one assistant turn into a live chat bubble; return (text, actions).
+
+    Tool steps surface as transient status lines; the final answer streams in
+    token-by-token. Returns the assembled text + action list for chat history.
+    """
+    client = ai.OpenRouterClient(ai_api_key, ai_model_name or ai.DEFAULT_MODEL)
+    with st.chat_message("assistant"):
+        status = st.status("Thinking…", expanded=False)
+        placeholder = st.empty()
+        pieces: list[str] = []
+        final_text, actions = "", []
+        try:
+            for event in ai.run_agent_stream(client, messages, TOOLS_IMPL):
+                kind = event["kind"]
+                if kind == "tool_start":
+                    status.update(label=f"Running `{event['name']}`…", state="running")
+                elif kind == "tool_end":
+                    status.write(event["summary"])
+                elif kind == "token":
+                    pieces.append(event["text"])
+                    placeholder.markdown("".join(pieces) + "▌")
+                elif kind == "final":
+                    final_text, actions = event["text"], event["actions"]
+        except ai.OpenRouterError as exc:
+            final_text, actions = f"⚠️ {exc}", []
+        status.update(label="Done", state="complete")
+        placeholder.markdown(final_text or "(no response)")
+        if actions:
+            st.caption("Actions: " + " · ".join(actions))
+    return final_text or "(no response)", actions
+
+
 def handle_user_message(user_text: str) -> None:
+    """Render the user's message, then stream the assistant's reply live."""
     st.session_state["chat_history"].append({"role": "user", "content": user_text})
+    with st.chat_message("user"):
+        st.markdown(user_text)
+
     if not ai_api_key:
+        warn = "⚠️ Add your OpenRouter API key in the sidebar to enable the assistant."
+        with st.chat_message("assistant"):
+            st.markdown(warn)
         st.session_state["chat_history"].append(
-            {
-                "role": "assistant",
-                "content": "⚠️ Add your OpenRouter API key in the sidebar to "
-                "enable the assistant.",
-                "actions": [],
-            }
+            {"role": "assistant", "content": warn, "actions": []}
         )
         return
-    client = ai.OpenRouterClient(ai_api_key, ai_model_name or ai.DEFAULT_MODEL)
+
     convo = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state["chat_history"]
     ]
     messages = [{"role": "system", "content": ai.SYSTEM_PROMPT}, *convo]
-    try:
-        text, actions = ai.run_agent(client, messages, TOOLS_IMPL)
-    except ai.OpenRouterError as exc:
-        text, actions = f"⚠️ {exc}", []
+    text, actions = _stream_assistant_reply(messages)
     st.session_state["chat_history"].append(
-        {"role": "assistant", "content": text or "(no response)", "actions": actions}
+        {"role": "assistant", "content": text, "actions": actions}
     )
 
 
 col_btn, _ = st.columns([1, 3])
 summarize_clicked = col_btn.button("Summarize this prediction", disabled=not ai_api_key)
-user_prompt = st.chat_input("Message the assistant…")
 
-if summarize_clicked:
-    handle_user_message(SUMMARIZE_PROMPT)
-if user_prompt:
-    handle_user_message(user_prompt)
-
+# Render the prior conversation, then stream any new turn live below it.
 for msg in st.session_state["chat_history"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg.get("actions"):
             st.caption("Actions: " + " · ".join(msg["actions"]))
+
+user_prompt = st.chat_input("Message the assistant…")
+new_message = SUMMARIZE_PROMPT if summarize_clicked else (user_prompt or None)
+if new_message:
+    handle_user_message(new_message)
 
 # ── model performance ────────────────────────────────────────────────────────
 st.header("Model performance")

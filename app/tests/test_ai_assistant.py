@@ -340,3 +340,191 @@ def test_client_chat_wraps_transport_errors():
     client = ai.OpenRouterClient("key", "m", session=session)
     with pytest.raises(ai.OpenRouterError):
         client.chat([{"role": "user", "content": "x"}])
+
+
+# ── SSE streaming: iter_sse_json ──────────────────────────────────────────────
+def test_iter_sse_json_parses_data_lines_and_stops_at_done():
+    lines = [
+        b'data: {"a": 1}',
+        b"",
+        b": this is a comment",
+        b'data: {"b": 2}',
+        b"data: [DONE]",
+        b'data: {"never": 3}',
+    ]
+    assert list(ai.iter_sse_json(lines)) == [{"a": 1}, {"b": 2}]
+
+
+def test_iter_sse_json_handles_str_lines_and_no_space():
+    lines = ['data:{"x": 9}', "garbage", 'data: {"y": 10}']
+    assert list(ai.iter_sse_json(lines)) == [{"x": 9}, {"y": 10}]
+
+
+# ── SSE streaming: assemble_message_stream ────────────────────────────────────
+def _content_chunk(text):
+    return {"choices": [{"delta": {"content": text}}]}
+
+
+def _toolcall_chunks(index, call_id, name, arg_fragments):
+    chunks = [
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": index,
+                                "id": call_id,
+                                "function": {"name": name, "arguments": ""},
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+    for frag in arg_fragments:
+        chunks.append(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {"index": index, "function": {"arguments": frag}}
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
+    return chunks
+
+
+def _drain(gen):
+    """Exhaust a generator that yields fragments and returns a value."""
+    fragments = []
+    while True:
+        try:
+            fragments.append(next(gen))
+        except StopIteration as stop:
+            return fragments, stop.value
+
+
+def test_assemble_message_stream_text_only():
+    gen = ai.assemble_message_stream(
+        iter([_content_chunk("Hel"), _content_chunk("lo")])
+    )
+    fragments, message = _drain(gen)
+    assert fragments == ["Hel", "lo"]
+    assert message["content"] == "Hello"
+    assert "tool_calls" not in message
+
+
+def test_assemble_message_stream_merges_tool_call_fragments():
+    chunks = _toolcall_chunks(0, "c1", "query_dataset", ['{"met', 'ric": "x"}'])
+    fragments, message = _drain(ai.assemble_message_stream(iter(chunks)))
+    assert fragments == []  # tool-call turns stream no visible text
+    assert message["content"] is None
+    call = message["tool_calls"][0]
+    assert call["id"] == "c1"
+    assert call["function"]["name"] == "query_dataset"
+    assert call["function"]["arguments"] == '{"metric": "x"}'
+
+
+# ── SSE streaming: run_agent_stream ───────────────────────────────────────────
+class FakeStreamClient:
+    """Scripted streaming client: each turn is a list of chunk dicts."""
+
+    def __init__(self, scripted_turns):
+        self._turns = list(scripted_turns)
+        self.calls = []
+
+    def stream_chat(self, messages, tools=None):
+        self.calls.append(list(messages))
+        if not self._turns:
+            raise AssertionError("FakeStreamClient ran out of turns")
+        return iter(self._turns.pop(0))
+
+
+def test_run_agent_stream_text_only_emits_tokens_then_final():
+    client = FakeStreamClient([[_content_chunk("Hel"), _content_chunk("lo")]])
+    events = list(ai.run_agent_stream(client, [{"role": "user", "content": "hi"}], {}))
+    tokens = [e["text"] for e in events if e["kind"] == "token"]
+    finals = [e for e in events if e["kind"] == "final"]
+    assert tokens == ["Hel", "lo"]
+    assert finals[-1]["text"] == "Hello"
+    assert finals[-1]["actions"] == []
+
+
+def test_run_agent_stream_runs_tool_then_streams_answer():
+    client = FakeStreamClient(
+        [
+            _toolcall_chunks(0, "c1", "query_dataset", ['{"metric": "overall"}']),
+            [_content_chunk("Done.")],
+        ]
+    )
+    seen = {}
+
+    def query_dataset(**kwargs):
+        seen.update(kwargs)
+        return {"summary": "looked it up"}
+
+    events = list(
+        ai.run_agent_stream(
+            client,
+            [{"role": "user", "content": "rate?"}],
+            {"query_dataset": query_dataset},
+        )
+    )
+    kinds = [e["kind"] for e in events]
+    assert "tool_start" in kinds and "tool_end" in kinds
+    start = next(e for e in events if e["kind"] == "tool_start")
+    assert start["name"] == "query_dataset"
+    assert seen == {"metric": "overall"}
+    final = next(e for e in events if e["kind"] == "final")
+    assert final["text"] == "Done."
+    assert len(final["actions"]) == 1
+
+
+def test_run_agent_stream_stops_at_iteration_cap():
+    loop_turn = _toolcall_chunks(0, "c", "noop", ["{}"])
+    client = FakeStreamClient([list(loop_turn) for _ in range(10)])
+    events = list(
+        ai.run_agent_stream(
+            client,
+            [{"role": "user", "content": "go"}],
+            {"noop": lambda: {"ok": True}},
+            max_iters=2,
+        )
+    )
+    assert len(client.calls) == 2
+    final = next(e for e in events if e["kind"] == "final")
+    assert any("max" in a.lower() for a in final["actions"])
+
+
+# ── SSE streaming: OpenRouterClient.stream_chat ───────────────────────────────
+class FakeStreamResponse:
+    def __init__(self, status_code, lines, text=""):
+        self.status_code = status_code
+        self._lines = lines
+        self.text = text
+
+    def iter_lines(self):
+        return iter(self._lines)
+
+
+def test_client_stream_chat_yields_parsed_chunks():
+    lines = [b'data: {"choices": [{"delta": {"content": "hi"}}]}', b"data: [DONE]"]
+    session = FakeSession(FakeStreamResponse(200, lines))
+    client = ai.OpenRouterClient("key", "m", session=session)
+    chunks = list(client.stream_chat([{"role": "user", "content": "x"}]))
+    assert chunks == [{"choices": [{"delta": {"content": "hi"}}]}]
+    assert session.last_post["stream"] is True
+
+
+def test_client_stream_chat_raises_on_non_200():
+    session = FakeSession(FakeStreamResponse(500, [], text="server boom"))
+    client = ai.OpenRouterClient("key", "m", session=session)
+    with pytest.raises(ai.OpenRouterError) as exc:
+        list(client.stream_chat([{"role": "user", "content": "x"}]))
+    assert "server boom" in str(exc.value)
