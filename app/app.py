@@ -402,12 +402,19 @@ with st.sidebar:
 
     st.divider()
     st.subheader("AI assistant (OpenRouter)")
+    if ai.AI_PROXY_URL:
+        st.caption("🔒 Routing through the hosted relay — no API key needed.")
     ai_api_key = st.text_input(
-        "OpenRouter API key", type="password", key="openrouter_key"
+        "OpenRouter API key (optional when relay is set)",
+        type="password",
+        key="openrouter_key",
     )
     ai_model_name = st.text_input(
         "Model", value=ai.DEFAULT_MODEL, key="openrouter_model"
     )
+
+# Assistant is usable when either a relay is configured or a key was pasted.
+assistant_ready = bool(ai.AI_PROXY_URL) or bool(ai_api_key)
 
 order_ts = pd.Timestamp(order_date)
 
@@ -567,7 +574,10 @@ def _stream_assistant_reply(messages: list[dict]) -> tuple[str, list[str]]:
     Tool steps surface as transient status lines; the final answer streams in
     token-by-token. Returns the assembled text + action list for chat history.
     """
-    client = ai.OpenRouterClient(ai_api_key, ai_model_name or ai.DEFAULT_MODEL)
+    base_url = ai.AI_PROXY_URL or ai.DEFAULT_BASE_URL
+    client = ai.OpenRouterClient(
+        ai_api_key, ai_model_name or ai.DEFAULT_MODEL, base_url=base_url
+    )
     with st.chat_message("assistant"):
         status = st.status("Thinking…", expanded=False)
         placeholder = st.empty()
@@ -600,7 +610,7 @@ def handle_user_message(user_text: str) -> None:
     with st.chat_message("user"):
         st.markdown(user_text)
 
-    if not ai_api_key:
+    if not assistant_ready:
         warn = "⚠️ Add your OpenRouter API key in the sidebar to enable the assistant."
         with st.chat_message("assistant"):
             st.markdown(warn)
@@ -622,7 +632,7 @@ def handle_user_message(user_text: str) -> None:
 
 col_summary, col_clear, _ = st.columns([1, 1, 2])
 summarize_clicked = col_summary.button(
-    "Summarize this prediction", disabled=not ai_api_key
+    "Summarize this prediction", disabled=not assistant_ready
 )
 if col_clear.button("Clear chat", disabled=not st.session_state["chat_history"]):
     st.session_state["chat_history"] = []

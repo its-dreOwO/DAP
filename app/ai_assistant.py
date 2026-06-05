@@ -13,6 +13,7 @@ over a per-mode base-rate lookup. The assistant must not overclaim model skill.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Callable
 
 import pandas as pd
@@ -23,6 +24,13 @@ except ImportError:  # pragma: no cover - requests is a declared dependency
     requests = None  # type: ignore[assignment]
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Optional self-hosted relay (e.g. a Caddy reverse proxy on a VPS) that injects
+# the real OpenRouter key server-side. When set, the app routes through it and
+# needs NO client-side key, so no `sk-or-...` ever lands in this public repo.
+# Override at runtime with the AI_PROXY_URL env var. Leave "" to use direct keys.
+AI_PROXY_URL = os.environ.get(
+    "AI_PROXY_URL", "https://ai.itsdre.me/api/v1/chat/completions"
+)
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_TIMEOUT = 15
 
