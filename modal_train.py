@@ -67,7 +67,12 @@ def main():
     print("Submitting training job to Modal (GPU: T4)...")
     train.remote()
 
-    # Download artifacts from volume
+    # Download artifacts from volume. Refresh the local handle first: it was
+    # created at import time, before train.remote() committed, so without a
+    # reload listdir() returns a stale snapshot and silently misses the
+    # freshly-written models (e.g. the per-model .pkl files).
+    volume.reload()
+
     out_root = Path("Data/filtered/model_outputs")
     out_root.mkdir(parents=True, exist_ok=True)
 

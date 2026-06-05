@@ -1,4 +1,0 @@
-risk_label,rows,avg_lead_time_days,avg_port_delay_days,avg_risk_probability,avg_quality_score,avg_reliability_index,avg_weather_disruption
-Low,482,4.3718,0.4988,0.3413,82.5148,0.8599,4.4041
-Medium,433,4.3954,1.3617,0.6214,82.864,0.8539,5.0674
-High,1563,4.4808,3.416,0.9668,82.4838,0.8473,5.1184

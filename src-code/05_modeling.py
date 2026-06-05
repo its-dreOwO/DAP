@@ -302,8 +302,15 @@ def build_estimator(key: str) -> Any:
     if key == "decision_tree":
         return DecisionTreeClassifier(max_depth=8, random_state=RANDOM_STATE)
     if key == "random_forest":
+        # Bounded forest: the unconstrained version (max_depth=None,
+        # min_samples_leaf=1) grew depth-~700 trees over 5,585 OHE features,
+        # producing a ~2 GB pickle that was both unusable and overfit. These
+        # caps shrink it to a few MB with essentially unchanged test metrics.
         return RandomForestClassifier(
-            n_estimators=300,
+            n_estimators=200,
+            max_depth=20,
+            min_samples_leaf=20,
+            max_features="sqrt",
             random_state=RANDOM_STATE,
             n_jobs=-1,
         )

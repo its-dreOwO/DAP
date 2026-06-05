@@ -1,8 +1,0 @@
-supplier_id,total_shipments,avg_lead_time,min_lead_time,max_lead_time
-SUP-G,103,14.76,14.76,14.76
-SUP-E,104,14.72,14.72,14.72
-SUP-F,104,14.69,14.69,14.69
-SUP-C,103,14.69,14.69,14.69
-SUP-B,105,14.69,14.69,14.69
-SUP-A,105,14.68,14.68,14.68
-SUP-D,104,14.62,14.62,14.62

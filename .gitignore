@@ -5,9 +5,7 @@ __pycache__/
 .~lock.*
 *.log
 
-# RandomForest pickles exceed GitHub 100MB on the 32k-row dataset; regenerate via src-code/05_modeling.py
-Data/filtered/model_outputs/random_forest_model.pkl
-Data/filtered/model_outputs/imbalance_weighted/random_forest_model.pkl
+# RandomForest is now bounded (max_depth=20, min_samples_leaf=20) → ~2.3MB, tracked.
 
 # Raw DataCo dataset (large; tokenized_access_logs.csv is unused). Re-download via:
 #   kaggle datasets download -d shashwatwork/dataco-smart-supply-chain-for-big-data-analysis -p Data/dataco_raw --unzip
