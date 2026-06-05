@@ -620,8 +620,13 @@ def handle_user_message(user_text: str) -> None:
     )
 
 
-col_btn, _ = st.columns([1, 3])
-summarize_clicked = col_btn.button("Summarize this prediction", disabled=not ai_api_key)
+col_summary, col_clear, _ = st.columns([1, 1, 2])
+summarize_clicked = col_summary.button(
+    "Summarize this prediction", disabled=not ai_api_key
+)
+if col_clear.button("Clear chat", disabled=not st.session_state["chat_history"]):
+    st.session_state["chat_history"] = []
+    st.rerun()
 
 # Render the prior conversation, then stream any new turn live below it.
 for msg in st.session_state["chat_history"]:
