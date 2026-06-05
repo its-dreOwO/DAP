@@ -432,6 +432,23 @@ def compute_prediction(override_map: dict[str, Any], with_model: Any) -> dict[st
     return out
 
 
+def prediction_snapshot(
+    override_map: dict[str, Any], with_model: Any, label: str
+) -> dict[str, Any]:
+    """Build the full ``last_prediction`` dict the AI's get_current_prediction
+    tool reads — ``compute_prediction`` plus the active model label + threshold.
+
+    Both the main render path and the AI's mutating tools write this exact shape
+    so a set→get within one agent turn observes the change immediately, instead
+    of reading the pre-turn snapshot until the next rerun.
+    """
+    return {
+        **compute_prediction(override_map, with_model),
+        "model_label": label,
+        "threshold": threshold,
+    }
+
+
 # ── prediction (always computed for current inputs) ──────────────────────────
 st.header("Prediction")
 mode = overrides.get(SHIPPING_MODE_COL, "")
@@ -442,11 +459,7 @@ tier, color = risk_tier(p_late)
 mode_rate = base_rates.get(str(mode))
 
 # Persist for the AI's get_current_prediction tool and the summarize button.
-st.session_state["last_prediction"] = {
-    **compute_prediction(overrides, model),
-    "model_label": model_label,
-    "threshold": threshold,
-}
+st.session_state["last_prediction"] = prediction_snapshot(overrides, model, model_label)
 
 st.subheader("Result")
 c1, c2, c3 = st.columns(3)
@@ -503,8 +516,11 @@ def _tool_set_shipment_inputs(**changes: Any) -> dict[str, Any]:
         new_mode = merged.get(SHIPPING_MODE_COL)
         if new_mode in MODE_TO_SCHEDULED_DAYS:
             merged[SCHEDULED_DAYS_COL] = MODE_TO_SCHEDULED_DAYS[new_mode]
-        prediction = compute_prediction(merged, model)
+        prediction = prediction_snapshot(merged, model, model_label)
         st.session_state["pending_inputs"].update(res["applied"])
+        # Make the write visible to a same-turn get_current_prediction; the
+        # sidebar/UI catch up on the next rerun.
+        st.session_state["last_prediction"] = prediction
         st.session_state["rerun_pending"] = True
         res = {**res, "prediction": prediction}
     return res
@@ -525,8 +541,9 @@ def _tool_switch_model(model_file: str) -> dict[str, Any]:
     new_model, label, _is_fb = resolve_model(model_file)
     if new_model is None:
         return {"error": f"could not load {model_file}"}
-    prediction = compute_prediction(overrides, new_model)
+    prediction = prediction_snapshot(overrides, new_model, label)
     st.session_state["active_model_file"] = model_file
+    st.session_state["last_prediction"] = prediction
     st.session_state["rerun_pending"] = True
     return {
         "applied": model_file,

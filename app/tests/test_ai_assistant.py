@@ -187,6 +187,62 @@ def test_run_agent_stops_at_iteration_cap():
     assert any("max" in a.lower() for a in actions)
 
 
+def test_set_then_get_observes_new_prediction_within_one_turn():
+    """Regression: a set_shipment_inputs tool must make its write visible to a
+    same-turn get_current_prediction.
+
+    The original bug only stashed the change in ``pending_inputs`` (applied on the
+    next rerun) without updating ``last_prediction``, so get_current_prediction
+    read the *pre-turn* snapshot. The agent saw its own write reflected as
+    unchanged, declared "it didn't persist", and looped to the iteration cap.
+
+    Here ``store`` stands in for ``st.session_state``: the set tool writes
+    ``last_prediction`` (the fix); the get tool reads it back via the real
+    ``describe_prediction_logic``. The agent sets Same Day then reads — the read
+    must return the new prediction, not the seed.
+    """
+    store = {"last_prediction": {"shipping_mode": "Standard Class", "p_late": 0.40}}
+
+    def set_inputs(**changes):
+        # Mirrors app.py's _tool_set_shipment_inputs fix: update last_prediction
+        # so a subsequent get_current_prediction in the same turn sees it.
+        new_pred = {"shipping_mode": changes["shipping_mode"], "p_late": 0.95}
+        store["last_prediction"] = new_pred
+        return {"applied": changes, "prediction": new_pred, "summary": "set"}
+
+    def get_pred():
+        return ai.describe_prediction_logic(store["last_prediction"])
+
+    client = FakeClient(
+        [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    _tool_call("c1", "set_inputs", {"shipping_mode": "Same Day"})
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [_tool_call("c2", "get_pred", {})],
+            },
+            {"role": "assistant", "content": "Same Day is now 95% late."},
+        ]
+    )
+    text, _ = ai.run_agent(
+        client,
+        [{"role": "user", "content": "try Same Day"}],
+        {"set_inputs": set_inputs, "get_pred": get_pred},
+    )
+    assert text == "Same Day is now 95% late."
+    # The get tool's result (last tool message) must reflect the set, not the seed.
+    tool_msgs = [m for m in client.calls[-1] if m.get("role") == "tool"]
+    get_result = json.loads(tool_msgs[-1]["content"])
+    assert get_result["shipping_mode"] == "Same Day"
+    assert get_result["p_late"] == 0.95
+
+
 # ── tool logic: set_shipment_inputs ───────────────────────────────────────────
 def test_set_inputs_accepts_valid_categorical(clean_df):
     out = ai.set_shipment_inputs_logic(clean_df, {"shipping_mode": "Same Day"})
