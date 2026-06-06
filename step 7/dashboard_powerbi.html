@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Rủi ro Trễ giao hàng theo Department — Project 8</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0f1419; --panel:#1a2230; --panel2:#212c3d; --line:#2c3a4f;
+  --txt:#e8edf4; --muted:#94a3b8; --accent:#3b82f6;
+  --high:#ef4444; --med:#f59e0b; --low:#22c55e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding:24px}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:2px solid var(--line);padding-bottom:18px;margin-bottom:8px}
+header h1{font-size:22px;font-weight:700}
+header .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.badge{background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:8px;font-size:12px;color:var(--muted)}
+/* Tabs */
+.tabs{display:flex;gap:6px;margin:20px 0;flex-wrap:wrap}
+.tab{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;transition:.15s}
+.tab:hover{background:var(--panel2);color:var(--txt)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page{display:none;animation:fade .25s}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:22px}
+.kpi{background:linear-gradient(135deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:12px;padding:18px}
+.kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.kpi .val{font-size:30px;font-weight:800;margin-top:6px}
+.kpi .note{color:var(--muted);font-size:12px;margin-top:4px}
+.kpi.red .val{color:var(--high)} .kpi.amber .val{color:var(--med)} .kpi.blue .val{color:var(--accent)}
+/* Panels & grid */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid1{display:grid;grid-template-columns:1fr;gap:18px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+.panel h3{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.panel h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.chartbox{position:relative;height:300px}
+.chartbox.tall{height:360px}
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.4px;position:sticky;top:0;background:var(--panel)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr:hover td{background:var(--panel2)}
+.tier{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.tier.High{background:rgba(239,68,68,.16);color:var(--high);border:1px solid var(--high)}
+.tier.Medium{background:rgba(245,158,11,.16);color:var(--med);border:1px solid var(--med)}
+.tier.Low{background:rgba(34,197,94,.16);color:var(--low);border:1px solid var(--low)}
+.scroll{max-height:420px;overflow:auto;border-radius:8px}
+.bar{height:7px;border-radius:4px;background:var(--accent);display:inline-block;vertical-align:middle;margin-right:8px}
+.slicer{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.slicer button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px}
+.slicer button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.callout{background:var(--panel2);border-left:3px solid var(--accent);padding:12px 16px;border-radius:0 8px 8px 0;margin-top:14px;font-size:13px;color:var(--txt)}
+.callout.warn{border-left-color:var(--med)}
+.callout.danger{border-left-color:var(--high)}
+ul.kl{list-style:none;display:flex;flex-direction:column;gap:12px}
+ul.kl li{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:14px}
+ul.kl li b{color:var(--accent)}
+footer{color:var(--muted);font-size:12px;text-align:center;margin-top:30px;padding-top:18px;border-top:1px solid var(--line)}
+.legend-mini{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend-mini span{display:flex;align-items:center;gap:6px}
+.legend-mini i{width:12px;height:12px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Dashboard Rủi ro Trễ giao hàng theo Department</h1>
+      <div class="sub">Project 8 — DataCo Smart Supply Chain · Khung đề tài: Delivery Delay Risk Prediction by Department</div>
+    </div>
+    <div class="badge">Mô hình: XGBoost · PR-AUC 0.832 · ROC-AUC 0.766</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-page="p1">1 · Tổng quan / Scorecard</button>
+    <button class="tab" data-page="p2">2 · Risk Alerts</button>
+    <button class="tab" data-page="p3">3 · Drill theo Shipping Mode</button>
+    <button class="tab" data-page="p4">4 · Kết luận: Diversify</button>
+  </div>
+
+  <!-- PAGE 1 -->
+  <section id="p1" class="page active">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h3><span class="dot"></span>Tỷ lệ trễ theo Department (%)</h3>
+        <div class="chartbox tall"><canvas id="chDept"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3><span class="dot"></span>Bảng điểm rủi ro (Department Scorecard)</h3>
+        <div class="scroll"><table id="tblScore"></table></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="callout warn">Lưu ý phân tích: Các department có tỷ lệ trễ khá đồng đều (~54–59%) → <b>Department một mình không phân biệt rủi ro mạnh</b>. Yếu tố quyết định thật sự là phương thức vận chuyển / số ngày giao dự kiến (xem trang 3).</div>
+    </div>
+  </section>
+
+  <!-- PAGE 2 -->
+  <section id="p2" class="page">
+    <div class="grid2">
+      <div class="panel">
+        <h3><span class="dot"></span>Phân bố điểm rủi ro (đơn High alert)</h3>
+        <div class="chartbox"><canvas id="chScore"></canvas></div>
+        <div class="callout danger">Nhóm <b>High</b> thực tế trễ <b id="hiLate">87.2%</b> — chứng tỏ điểm rủi ro phân tầng đúng (so với Low ~36%).</div>
+      </div>
+      <div class="panel">
+        <h3><span class="dot"></span>Tỷ lệ trễ thực tế theo Shipping Mode</h3>
+        <div class="chartbox"><canvas id="chShip"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3><span class="dot"></span>Top đơn rủi ro cao nhất (Risk Alerts)</h3>
+      <div class="slicer" id="shipSlicer"></div>
+      <div class="scroll"><table id="tblAlerts"></table></div>
+    </div>
+  </section>
+
+  <!-- PAGE 3 -->
+  <section id="p3" class="page">
+    <div class="panel">
+      <h3><span class="dot"></span>Tỷ lệ trễ theo Department × Shipping Mode</h3>
+      <div class="chartbox tall"><canvas id="chDrill"></canvas></div>
+      <div class="legend-mini">
+        <span><i style="background:#22c55e"></i>Standard Class (~38%)</span>
+        <span><i style="background:#f59e0b"></i>Second Class (~76%)</span>
+        <span><i style="background:#ef4444"></i>First Class (~95%)</span>
+        <span><i style="background:#3b82f6"></i>Same Day</span>
+      </div>
+      <div class="callout">Phát hiện cốt lõi: trong cùng một department, <b>First Class trễ ~95%</b> còn <b>Standard Class chỉ ~38%</b>. Rủi ro nằm ở phương thức vận chuyển, không phải ở department.</div>
+    </div>
+  </section>
+
+  <!-- PAGE 4 -->
+  <section id="p4" class="page">
+    <div class="grid2">
+      <div class="panel">
+        <h3><span class="dot"></span>Doanh thu chịu rủi ro — Top tổ hợp cần Diversify</h3>
+        <div class="chartbox tall"><canvas id="chRev"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3><span class="dot"></span>Bảng ưu tiên xử lý (Top 15)</h3>
+        <div class="scroll"><table id="tblTop"></table></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3><span class="dot"></span>Kết luận &amp; Khuyến nghị (cho Procurement)</h3>
+      <ul class="kl">
+        <li><b>1. Rủi ro tập trung ở khối lượng lớn:</b> Fan Shop + Apparel + Golf chiếm phần lớn doanh thu chịu rủi ro. Tổ hợp <b>Fan Shop × Standard Class</b> đứng đầu (~3.52M USD).</li>
+        <li><b>2. First Class gần như luôn trễ (~95%):</b> cần rà soát lại cam kết thời gian, hoặc đặt số ngày giao dự kiến thực tế hơn cho phương thức này.</li>
+        <li><b>3. Diversify hướng vận chuyển:</b> chuyển bớt đơn giá trị cao từ First/Second Class sang Standard Class (trễ thấp hơn nhiều) để giảm tổng doanh thu chịu rủi ro.</li>
+        <li><b>4. Dùng mô hình để cảnh báo sớm:</b> XGBoost (PR-AUC 0.832) chấm điểm rủi ro từng đơn — ưu tiên can thiệp nhóm High alert.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Nguồn: DataCo Smart Supply Chain (Kaggle) · Số liệu từ pipeline SQL + modeling của nhóm (Project 8) · Dashboard tạo cho Bước 7
+  </footer>
+</div>
+
+<script>
+/* === DATA INJECTED BELOW === */
+const DASH = {"kpi": {"total_orders": 180519, "overall_late_rate": 54.8, "high_alerts": 4496, "total_rev_at_risk": 16694349.0, "n_departments": 11}, "scorecard": [{"department": "Pet Shop", "total_orders": 492, "late_orders": 290, "late_rate_pct": 58.9, "avg_scheduled_days": 2.68, "avg_sales": 75.85, "risk_rank": 1, "risk_tier": "High"}, {"department": "Book Shop", "total_orders": 405, "late_orders": 229, "late_rate_pct": 56.5, "avg_scheduled_days": 2.86, "avg_sales": 27.91, "risk_rank": 2, "risk_tier": "High"}, {"department": "Health and Beauty", "total_orders": 362, "late_orders": 202, "late_rate_pct": 55.8, "avg_scheduled_days": 2.93, "avg_sales": 263.42, "risk_rank": 3, "risk_tier": "Medium"}, {"department": "Fitness", "total_orders": 2479, "late_orders": 1377, "late_rate_pct": 55.5, "avg_scheduled_days": 2.92, "avg_sales": 144.07, "risk_rank": 4, "risk_tier": "Medium"}, {"department": "Outdoors", "total_orders": 9686, "late_orders": 5375, "late_rate_pct": 55.5, "avg_scheduled_days": 2.95, "avg_sales": 116.25, "risk_rank": 5, "risk_tier": "Medium"}, {"department": "Technology", "total_orders": 1465, "late_orders": 806, "late_rate_pct": 55.0, "avg_scheduled_days": 2.86, "avg_sales": 637.43, "risk_rank": 6, "risk_tier": "Medium"}, {"department": "Fan Shop", "total_orders": 66861, "late_orders": 36623, "late_rate_pct": 54.8, "avg_scheduled_days": 2.93, "avg_sales": 230.01, "risk_rank": 7, "risk_tier": "Medium"}, {"department": "Golf", "total_orders": 33220, "late_orders": 18198, "late_rate_pct": 54.8, "avg_scheduled_days": 2.92, "avg_sales": 124.69, "risk_rank": 8, "risk_tier": "Medium"}, {"department": "Apparel", "total_orders": 48998, "late_orders": 26825, "late_rate_pct": 54.7, "avg_scheduled_days": 2.93, "avg_sales": 146.28, "risk_rank": 9, "risk_tier": "Medium"}, {"department": "Footwear", "total_orders": 14525, "late_orders": 7949, "late_rate_pct": 54.7, "avg_scheduled_days": 2.93, "avg_sales": 247.81, "risk_rank": 10, "risk_tier": "Medium"}, {"department": "Discs Shop", "total_orders": 2026, "late_orders": 1103, "late_rate_pct": 54.4, "avg_scheduled_days": 3.01, "avg_sales": 101.52, "risk_rank": 11, "risk_tier": "Low"}], "top_risk": [{"department": "Fan Shop", "shipping_mode": "Standard Class", "total_orders": 39984, "late_rate_pct": 38.2, "avg_sales": 230.58, "revenue_at_risk": 3521853.0, "priority_rank": 1}, {"department": "Fan Shop", "shipping_mode": "Second Class", "total_orders": 13013, "late_rate_pct": 76.5, "avg_sales": 228.38, "revenue_at_risk": 2273510.0, "priority_rank": 2}, {"department": "Fan Shop", "shipping_mode": "First Class", "total_orders": 10249, "late_rate_pct": 95.1, "avg_sales": 231.29, "revenue_at_risk": 2254337.0, "priority_rank": 3}, {"department": "Apparel", "shipping_mode": "Standard Class", "total_orders": 29225, "late_rate_pct": 38.0, "avg_sales": 146.45, "revenue_at_risk": 1626400.0, "priority_rank": 4}, {"department": "Apparel", "shipping_mode": "Second Class", "total_orders": 9685, "late_rate_pct": 76.7, "avg_sales": 146.03, "revenue_at_risk": 1084769.0, "priority_rank": 5}, {"department": "Apparel", "shipping_mode": "First Class", "total_orders": 7433, "late_rate_pct": 95.4, "avg_sales": 145.79, "revenue_at_risk": 1033809.0, "priority_rank": 6}, {"department": "Golf", "shipping_mode": "Standard Class", "total_orders": 19743, "late_rate_pct": 37.8, "avg_sales": 124.48, "revenue_at_risk": 928976.0, "priority_rank": 7}, {"department": "Footwear", "shipping_mode": "Standard Class", "total_orders": 8676, "late_rate_pct": 38.0, "avg_sales": 247.86, "revenue_at_risk": 817165.0, "priority_rank": 8}, {"department": "Golf", "shipping_mode": "First Class", "total_orders": 5276, "late_rate_pct": 95.2, "avg_sales": 124.56, "revenue_at_risk": 625634.0, "priority_rank": 9}, {"department": "Golf", "shipping_mode": "Second Class", "total_orders": 6424, "late_rate_pct": 76.1, "avg_sales": 125.48, "revenue_at_risk": 613430.0, "priority_rank": 10}, {"department": "Footwear", "shipping_mode": "Second Class", "total_orders": 2814, "late_rate_pct": 76.3, "avg_sales": 252.02, "revenue_at_risk": 541108.0, "priority_rank": 11}, {"department": "Footwear", "shipping_mode": "First Class", "total_orders": 2252, "late_rate_pct": 95.5, "avg_sales": 245.6, "revenue_at_risk": 528202.0, "priority_rank": 12}, {"department": "Fan Shop", "shipping_mode": "Same Day", "total_orders": 3615, "late_rate_pct": 46.1, "avg_sales": 225.96, "revenue_at_risk": 376566.0, "priority_rank": 13}, {"department": "Outdoors", "shipping_mode": "Standard Class", "total_orders": 5839, "late_rate_pct": 38.9, "avg_sales": 116.82, "revenue_at_risk": 265342.0, "priority_rank": 14}, {"department": "Technology", "shipping_mode": "Standard Class", "total_orders": 838, "late_rate_pct": 35.0, "avg_sales": 692.97, "revenue_at_risk": 203248.0, "priority_rank": 15}], "alerts": [{"order_id": "9171", "risk_score": 0.9982, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "3432", "risk_score": 0.9981, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "36502", "risk_score": 0.9981, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "33311", "risk_score": 0.998, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "1972", "risk_score": 0.998, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "1061", "risk_score": 0.9979, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "53256", "risk_score": 0.9979, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "37073", "risk_score": 0.9979, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "5853", "risk_score": 0.9979, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "19726", "risk_score": 0.9978, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "49659", "risk_score": 0.9978, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "52351", "risk_score": 0.9977, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "65957", "risk_score": 0.9977, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "12521", "risk_score": 0.9977, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "44682", "risk_score": 0.9977, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "6021", "risk_score": 0.9976, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "20519", "risk_score": 0.9976, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "71016", "risk_score": 0.9976, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "73457", "risk_score": 0.9975, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "74884", "risk_score": 0.9975, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "63318", "risk_score": 0.9975, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "7831", "risk_score": 0.9975, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "52251", "risk_score": 0.9975, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "18631", "risk_score": 0.9974, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "64", "risk_score": 0.9974, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "19399", "risk_score": 0.9974, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "67967", "risk_score": 0.9974, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "22246", "risk_score": 0.9973, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "75953", "risk_score": 0.9973, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "49477", "risk_score": 0.9973, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "73313", "risk_score": 0.9973, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "266", "risk_score": 0.9973, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "57311", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "28672", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "17491", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "22247", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "8697", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "19606", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "48278", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "25115", "risk_score": 0.9972, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "41349", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "42443", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "64868", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "28645", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "65909", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "19393", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "67709", "risk_score": 0.9971, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "45298", "risk_score": 0.997, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "33847", "risk_score": 0.997, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}, {"order_id": "4802", "risk_score": 0.997, "risk_tier": "High", "shipping_mode": "First Class", "actual_late": 1}], "summary": {"total_alert_rows": 12193, "unique_orders": 4496, "high_late_rate": 87.2, "ship_late_rate": {"First Class": 95.3, "Same Day": 95.3, "Second Class": 78.1, "Standard Class": 57.1}, "score_buckets": {"0.7": 5289, "0.8": 2197, "0.9": 4707}}};
+/* === RENDER === */
+const fmtN = n => n.toLocaleString('en-US');
+const fmtUSD = n => '$' + Math.round(n).toLocaleString('en-US');
+const tierColor = t => t==='High'?'#ef4444':t==='Medium'?'#f59e0b':'#22c55e';
+const modeColor = m => ({'Standard Class':'#22c55e','Second Class':'#f59e0b','First Class':'#ef4444','Same Day':'#3b82f6'})[m]||'#94a3b8';
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = "'Segoe UI',system-ui,sans-serif";
+Chart.defaults.borderColor = 'rgba(44,58,79,.5)';
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.page).classList.add('active');
+});
+
+/* KPI cards */
+const k = DASH.kpi;
+document.getElementById('kpis').innerHTML = [
+  {l:'Tổng dòng đơn-hàng',v:fmtN(k.total_orders),n:'order-item grain',c:'blue'},
+  {l:'Tỷ lệ trễ tổng',v:k.overall_late_rate+'%',n:'toàn bộ dữ liệu',c:'red'},
+  {l:'Đơn High alert',v:fmtN(k.high_alerts),n:'risk_score ≥ 0.7 (đơn duy nhất)',c:'amber'},
+  {l:'Doanh thu chịu rủi ro',v:fmtUSD(k.total_rev_at_risk),n:'top 15 tổ hợp',c:'red'},
+  {l:'Số Department',v:k.n_departments,n:'phân tích theo phòng ban',c:'blue'},
+].map(x=>`<div class="kpi ${x.c}"><div class="label">${x.l}</div><div class="val">${x.v}</div><div class="note">${x.n}</div></div>`).join('');
+
+document.getElementById('hiLate').textContent = DASH.summary.high_late_rate + '%';
+
+/* Scorecard table */
+document.getElementById('tblScore').innerHTML =
+ '<thead><tr><th>Department</th><th class="num">Đơn</th><th class="num">Tỷ lệ trễ</th><th>Tier</th><th class="num">Rank</th></tr></thead><tbody>' +
+ DASH.scorecard.map(s=>`<tr><td>${s.department}</td><td class="num">${fmtN(s.total_orders)}</td><td class="num">${s.late_rate_pct}%</td><td><span class="tier ${s.risk_tier}">${s.risk_tier}</span></td><td class="num">${s.risk_rank}</td></tr>`).join('') +
+ '</tbody>';
+
+/* Chart: late rate by department */
+const sc = [...DASH.scorecard].sort((a,b)=>b.late_rate_pct-a.late_rate_pct);
+new Chart(document.getElementById('chDept'),{type:'bar',data:{labels:sc.map(s=>s.department),
+ datasets:[{data:sc.map(s=>s.late_rate_pct),backgroundColor:sc.map(s=>tierColor(s.risk_tier)),borderRadius:5}]},
+ options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+'% trễ'}}},
+ scales:{x:{min:50,max:62,ticks:{callback:v=>v+'%'}}}}});
+
+/* Chart: score buckets */
+const sb = DASH.summary.score_buckets;
+new Chart(document.getElementById('chScore'),{type:'bar',data:{labels:Object.keys(sb).map(b=>b+'–'+(parseFloat(b)+0.1).toFixed(1)),
+ datasets:[{label:'Số dòng đơn',data:Object.values(sb),backgroundColor:'#3b82f6',borderRadius:5}]},
+ options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtN(v)}}}}});
+
+/* Chart: late rate by shipping mode */
+const sl = DASH.summary.ship_late_rate;
+new Chart(document.getElementById('chShip'),{type:'bar',data:{labels:Object.keys(sl),
+ datasets:[{data:Object.values(sl),backgroundColor:Object.keys(sl).map(modeColor),borderRadius:5}]},
+ options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'% trễ'}}},scales:{y:{max:100,ticks:{callback:v=>v+'%'}}}}});
+
+/* Alerts table + slicer */
+const modes = [...new Set(DASH.alerts.map(a=>a.shipping_mode))];
+let curMode='ALL';
+function renderAlerts(){
+  const rows = DASH.alerts.filter(a=>curMode==='ALL'||a.shipping_mode===curMode);
+  document.getElementById('tblAlerts').innerHTML =
+   '<thead><tr><th>Order Id</th><th class="num">Risk score</th><th>Tier</th><th>Shipping Mode</th><th>Trễ thực tế</th></tr></thead><tbody>'+
+   rows.map(a=>`<tr><td>${a.order_id}</td><td class="num">${a.risk_score.toFixed(4)}</td><td><span class="tier ${a.risk_tier}">${a.risk_tier}</span></td><td>${a.shipping_mode}</td><td>${a.actual_late?'✔️ Có':'—'}</td></tr>`).join('')+
+   '</tbody>';
+}
+document.getElementById('shipSlicer').innerHTML =
+ `<button class="active" data-m="ALL">Tất cả</button>`+modes.map(m=>`<button data-m="${m}">${m}</button>`).join('');
+document.querySelectorAll('#shipSlicer button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#shipSlicer button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');curMode=b.dataset.m;renderAlerts();
+});
+renderAlerts();
+
+/* Drill chart: dept x mode late rate (grouped) */
+const drillModes=['Standard Class','Second Class','First Class','Same Day'];
+const depts=[...new Set(DASH.top_risk.map(t=>t.department))];
+const drillDs = drillModes.map(m=>({label:m,backgroundColor:modeColor(m),borderRadius:4,
+ data:depts.map(d=>{const r=DASH.top_risk.find(t=>t.department===d&&t.shipping_mode===m);return r?r.late_rate_pct:null;})}));
+new Chart(document.getElementById('chDrill'),{type:'bar',data:{labels:depts,datasets:drillDs},
+ options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'% trễ'}}},
+ scales:{y:{max:100,ticks:{callback:v=>v+'%'}}}}});
+
+/* Revenue at risk chart */
+const tr = DASH.top_risk;
+new Chart(document.getElementById('chRev'),{type:'bar',data:{labels:tr.map(t=>t.department+' · '+t.shipping_mode),
+ datasets:[{data:tr.map(t=>t.revenue_at_risk),backgroundColor:tr.map(t=>modeColor(t.shipping_mode)),borderRadius:5}]},
+ options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtUSD(c.parsed.x)+' chịu rủi ro'}}},
+ scales:{x:{ticks:{callback:v=>'$'+(v/1e6).toFixed(1)+'M'}}}}});
+
+/* Top table */
+document.getElementById('tblTop').innerHTML =
+ '<thead><tr><th class="num">#</th><th>Department</th><th>Shipping Mode</th><th class="num">Tỷ lệ trễ</th><th class="num">DT chịu rủi ro</th></tr></thead><tbody>'+
+ tr.map(t=>`<tr><td class="num">${t.priority_rank}</td><td>${t.department}</td><td>${t.shipping_mode}</td><td class="num">${t.late_rate_pct}%</td><td class="num">${fmtUSD(t.revenue_at_risk)}</td></tr>`).join('')+
+ '</tbody>';
+</script>
+</body>
+</html>

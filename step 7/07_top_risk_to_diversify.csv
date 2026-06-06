@@ -1,0 +1,16 @@
+department,shipping_mode,total_orders,late_rate_pct,avg_sales,revenue_at_risk,priority_rank
+Fan Shop,Standard Class,39984,38.2,230.58,3521853.0,1
+Fan Shop,Second Class,13013,76.5,228.38,2273510.0,2
+Fan Shop,First Class,10249,95.1,231.29,2254337.0,3
+Apparel,Standard Class,29225,38.0,146.45,1626400.0,4
+Apparel,Second Class,9685,76.7,146.03,1084769.0,5
+Apparel,First Class,7433,95.4,145.79,1033809.0,6
+Golf,Standard Class,19743,37.8,124.48,928976.0,7
+Footwear,Standard Class,8676,38.0,247.86,817165.0,8
+Golf,First Class,5276,95.2,124.56,625634.0,9
+Golf,Second Class,6424,76.1,125.48,613430.0,10
+Footwear,Second Class,2814,76.3,252.02,541108.0,11
+Footwear,First Class,2252,95.5,245.6,528202.0,12
+Fan Shop,Same Day,3615,46.1,225.96,376566.0,13
+Outdoors,Standard Class,5839,38.9,116.82,265342.0,14
+Technology,Standard Class,838,35.0,692.97,203248.0,15
