@@ -270,7 +270,7 @@ def run_agent(
     messages: list[dict],
     tools_impl: dict[str, Callable[..., Any]],
     *,
-    max_iters: int = 5,
+    max_iters: int = 25,
 ) -> tuple[str, list[str]]:
     """Drive the tool-calling loop until the model returns plain text.
 
@@ -306,7 +306,7 @@ def run_agent_stream(
     messages: list[dict],
     tools_impl: dict[str, Callable[..., Any]],
     *,
-    max_iters: int = 5,
+    max_iters: int = 25,
 ):
     """Streaming variant of :func:`run_agent`, yielding events for live UI.
 

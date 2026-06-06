@@ -73,13 +73,13 @@ MODE_TO_SCHEDULED_DAYS = {
 }
 
 MODEL_CANDIDATES: list[tuple[str, str, bool]] = [
-    ("primary_model.pkl", "XGBoost (primary deployment model)", False),
-    ("xgb_model.pkl", "XGBoost", False),
-    ("best_model.pkl", "Best model by PR-AUC (fallback — may not be XGBoost)", True),
+    ("xgb_model.pkl", "XGBoost (primary deployment model)", False),
     ("random_forest_model.pkl", "Random Forest (fallback)", True),
+    ("decision_tree_model.pkl", "Decision Tree (fallback)", True),
+    ("logistic_model.pkl", "Logistic Regression (fallback)", True),
 ]
 MODEL_LABELS = {fn: label for fn, label, _ in MODEL_CANDIDATES}
-NON_FALLBACK_FILES = {"primary_model.pkl", "xgb_model.pkl"}
+NON_FALLBACK_FILES = {"xgb_model.pkl"}
 
 PIPELINE_HINT = (
     "Train the models first:\n"
@@ -319,7 +319,7 @@ if model is None:
 if model_is_fallback:
     st.warning(
         "Loaded a fallback model (not the XGBoost primary). Run "
-        "`modal run modal_train.py` to regenerate `primary_model.pkl`."
+        "`modal run modal_train.py` to regenerate `xgb_model.pkl`."
     )
 
 clean_df = load_clean_data()
