@@ -293,13 +293,14 @@ def _default_option(options: list[str], preferred: Any, fallback: str) -> str:
     return options[0] if options else fallback
 
 
-def _bounded_number(value: Any, spec: dict[str, Any]) -> int | float:
+def _bounded_number(value: Any, spec: dict[str, Any], col: str) -> int | float:
     low = spec["min"]
     high = spec["max"]
     try:
         number = float(value)
     except (TypeError, ValueError):
-        number = float(SIDEBAR_DEFAULTS.get(spec["label"], low))
+        # SIDEBAR_DEFAULTS is keyed by column name, not the display label.
+        number = float(SIDEBAR_DEFAULTS.get(col, low))
     number = min(max(number, float(low)), float(high))
     if spec.get("kind") == "int":
         return int(round(number))
@@ -321,7 +322,7 @@ def seed_sidebar_state(
     for col, spec in EXPOSED_NUMERIC.items():
         key = f"in_{col}"
         if key not in st.session_state:
-            st.session_state[key] = _bounded_number(template.get(col), spec)
+            st.session_state[key] = _bounded_number(template.get(col), spec, col)
 
 
 def apply_pending_inputs(
@@ -338,7 +339,7 @@ def apply_pending_inputs(
             if str(value) in options:
                 st.session_state[key] = str(value)
         elif col in EXPOSED_NUMERIC:
-            st.session_state[key] = _bounded_number(value, EXPOSED_NUMERIC[col])
+            st.session_state[key] = _bounded_number(value, EXPOSED_NUMERIC[col], col)
 
     st.session_state["pending_inputs"] = {}
 
